@@ -7,32 +7,48 @@ const Navbar = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userType, setUserType] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
 
-  // Check login status
+  // Check login status and user data
   useEffect(() => {
-    const type = localStorage.getItem('userType');
+    const type = localStorage.getItem("userType");
     if (type) {
       setIsLoggedIn(true);
       setUserType(type);
+
+      // Get user/institution name and email from localStorage
+      if (type === "institution") {
+        setUserName(localStorage.getItem("institutionName") || "Institution");
+        setUserEmail(localStorage.getItem("institutionEmail") || "");
+      } else {
+        setUserName(localStorage.getItem("userName") || "User");
+        setUserEmail(localStorage.getItem("userEmail") || "");
+      }
     }
-  }, []);
+  }, [location.pathname]); // Re-check when route changes
 
   // Check if we're on the dashboard page
-  const isDashboardPage = location.pathname === '/dashboard';
+  const isDashboardPage = location.pathname === "/dashboard";
 
   const handleLogout = () => {
-    // Clear localStorage
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('institutionId');
-    localStorage.removeItem('institutionEmail');
-    
+    // Clear all localStorage data
+    localStorage.removeItem("token");
+    localStorage.removeItem("userType");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("institutionId");
+    localStorage.removeItem("institutionEmail");
+    localStorage.removeItem("institutionName");
+
     // Update state
     setIsLoggedIn(false);
     setUserType(null);
-    
+    setUserName("");
+    setUserEmail("");
+
     // Redirect to home
-    navigate('/');
+    navigate("/");
   };
 
   return (
@@ -43,12 +59,18 @@ const Navbar = () => {
             <div className="w-8 h-8 bg-[#658B6F] rounded-lg"></div>
             <span className="text-white text-xl font-bold">SafetyNet</span>
           </Link>
-          
+
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-[#CEE1DD] hover:text-white transition-colors ">
+            <Link
+              to="/"
+              className="text-[#CEE1DD] hover:text-white transition-colors "
+            >
               Home
             </Link>
-            <Link to="/dashboard" className="text-[#CEE1DD] hover:text-white transition-colors">
+            <Link
+              to="/dashboard"
+              className="text-[#CEE1DD] hover:text-white transition-colors"
+            >
               Dashboard
             </Link>
           </div>
@@ -61,31 +83,74 @@ const Navbar = () => {
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="flex items-center gap-2 bg-[#658B6F] hover:bg-[#6D9197] text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  <img src="/assets/images/account.png" alt="Profile" className="w-6 h-6 rounded-full" />
-                  <span className="text-sm">
-                    {userType === 'institution' ? 'Institution' : 'User'}
-                  </span>
-                  <svg 
-                    className={`w-4 h-4 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <div className="w-8 h-8 bg-[#CEE1DD] rounded-full flex items-center justify-center text-[#28363D] font-semibold">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <p className="text-sm font-medium">{userName}</p>
+                    {userEmail && (
+                      <p className="text-xs opacity-75 truncate max-w-[150px]">
+                        {userEmail}
+                      </p>
+                    )}
+                  </div>
+                  <svg
+                    className={`w-4 h-4 transition-transform ${
+                      showProfileMenu ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
 
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl py-2 z-50">
+                    {/* User Info Header */}
+                    <div className="px-4 py-3 border-b border-[#CEE1DD]">
+                      <p className="text-sm font-semibold text-[#28363D]">
+                        {userName}
+                      </p>
+                      <p className="text-xs text-[#6D9197] truncate">
+                        {userEmail}
+                      </p>
+                      <p className="text-xs text-[#99AEAD] mt-1">
+                        {userType === "institution"
+                          ? "Institution Account"
+                          : "User Account"}
+                      </p>
+                    </div>
+
                     <button
                       onClick={() => {
                         setShowProfileMenu(false);
-                        navigate(userType === 'institution' ? '/institution/profile/edit' : '/profile/edit');
+                        navigate(
+                          userType === "institution"
+                            ? "/institution/profile/edit"
+                            : "/profile/edit"
+                        );
                       }}
                       className="w-full text-left px-4 py-2 text-[#28363D] hover:bg-[#CEE1DD] transition-colors flex items-center gap-2"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
                       </svg>
                       Edit Profile
                     </button>
@@ -97,8 +162,18 @@ const Navbar = () => {
                       }}
                       className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
                       </svg>
                       Logout
                     </button>

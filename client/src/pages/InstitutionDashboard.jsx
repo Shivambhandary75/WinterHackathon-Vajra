@@ -1,150 +1,194 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import axiosInstance from "../utils/axiosInstance";
 
 const InstitutionDashboard = () => {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState("all");
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [institutionData, setInstitutionData] = useState(null);
 
-  // Check if user is an authorized institution
+  // Fetch institution profile data
   useEffect(() => {
-    const userType = localStorage.getItem('userType');
-    
-    if (userType !== 'institution') {
-      // Not an institution user - redirect
-      navigate('/institution-login');
-    }
-  }, [navigate]);
+    fetchInstitutionProfile();
+    fetchReports();
+  }, []);
 
-  const [reports, setReports] = useState([
-    {
-      id: 1,
-      type: 'crime',
-      title: 'Theft Reported',
-      description: 'Bike theft near metro station',
-      location: { lat: 28.6139, lng: 77.2090 },
-      address: 'Connaught Place, New Delhi',
-      status: 'pending',
-      upvotes: 15,
-      downvotes: 2,
-      reporter: 'Anonymous User (Verified)',
-      reporterId: 'USER_1234',
-      date: '2026-01-10',
-      proof: 'theft_evidence.jpg',
-      assignedTo: null,
-      priority: 'high',
-      institutionNotes: '',
-    },
-    {
-      id: 2,
-      type: 'missing',
-      title: 'Missing Person',
-      description: 'Last seen wearing blue shirt',
-      location: { lat: 19.0760, lng: 72.8777 },
-      address: 'Marine Drive, Mumbai',
-      status: 'in-progress',
-      upvotes: 28,
-      downvotes: 1,
-      reporter: 'Verified User',
-      reporterId: 'USER_5678',
-      date: '2026-01-11',
-      proof: 'person_photo.jpg',
-      assignedTo: 'Officer Kumar',
-      priority: 'critical',
-      institutionNotes: 'Search team deployed',
-    },
-    {
-      id: 3,
-      type: 'dog-attack',
-      title: 'Stray Dog Attack',
-      description: 'Aggressive stray dogs in the area',
-      location: { lat: 12.9716, lng: 77.5946 },
-      address: 'Koramangala, Bangalore',
-      status: 'pending',
-      upvotes: 42,
-      downvotes: 8,
-      reporter: 'Local Resident',
-      reporterId: 'USER_9012',
-      date: '2026-01-09',
-      proof: null,
-      assignedTo: null,
-      priority: 'medium',
-      institutionNotes: '',
-    },
-    {
-      id: 4,
-      type: 'natural',
-      title: 'Flood Risk Zone',
-      description: 'Heavy rainfall causing waterlogging',
-      location: { lat: 22.5726, lng: 88.3639 },
-      address: 'Salt Lake, Kolkata',
-      status: 'resolved',
-      upvotes: 67,
-      downvotes: 3,
-      reporter: 'Verified User',
-      reporterId: 'USER_3456',
-      date: '2026-01-08',
-      proof: 'flood_area.jpg',
-      assignedTo: 'Disaster Team A',
-      priority: 'critical',
-      institutionNotes: 'Drainage cleared, area safe',
-    },
-  ]);
+  const fetchInstitutionProfile = async () => {
+    try {
+      const response = await axiosInstance.get("/institutions/me");
+      setInstitutionData(response.data.institution || response.data);
+      // Update localStorage with latest institution data
+      if (response.data.institution) {
+        localStorage.setItem('institutionName', response.data.institution.institutionName);
+        localStorage.setItem('institutionEmail', response.data.institution.officialEmail);
+      }
+    } catch (err) {
+      console.error("Error fetching institution profile:", err);
+      if (err.response?.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        localStorage.removeItem('userType');
+        navigate("/institution-login");
+      }
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get("/reports");
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || [];
+
+      // Transform data to match component format
+      const transformedData = data.map((report) => ({
+        id: report._id,
+        type: report.category?.toLowerCase() || "other",
+        title: report.title,
+        description: report.description,
+        location: {
+          lat: report.location?.coordinates?.[1] || 0,
+          lng: report.location?.coordinates?.[0] || 0,
+        },
+        address: report.location?.address || "Unknown Location",
+        status: report.status?.toLowerCase() || "pending",
+        upvotes: report.upvotes || 0,
+        downvotes: report.downvotes || 0,
+        reporter: report.reportedBy?.name || "Anonymous User",
+        reporterId: report.reportedBy?._id || "",
+        date: report.createdAt
+          ? new Date(report.createdAt).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        proof: report.images?.length > 0 ? report.images[0].url : null,
+        assignedTo: report.assignedTo || null,
+        priority: report.priority?.toLowerCase() || "medium",
+        institutionNotes: report.institutionNotes || "",
+      }));
+
+      setReports(transformedData);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError("Failed to load reports");
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (id, newStatus) => {
+    try {
+      await axiosInstance.patch(`/reports/${id}`, {
+        status: newStatus.toUpperCase(),
+      });
+      // Update local state
+      setReports(
+        reports.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+      );
+    } catch (err) {
+      console.error("Error updating status:", err);
+      alert("Failed to update status");
+    }
+  };
+
+  const handleAssignment = async (id, officer) => {
+    try {
+      await axiosInstance.post(`/assignments`, {
+        reportId: id,
+        assignedTo: officer,
+      });
+      // Update local state
+      setReports(
+        reports.map((r) =>
+          r.id === id ? { ...r, assignedTo: officer, status: "in-progress" } : r
+        )
+      );
+    } catch (err) {
+      console.error("Error assigning report:", err);
+      alert("Failed to assign report");
+    }
+  };
+
+  const handleNotesUpdate = async (id, notes) => {
+    try {
+      await axiosInstance.patch(`/reports/${id}`, {
+        institutionNotes: notes,
+      });
+      // Update local state
+      setReports(
+        reports.map((r) =>
+          r.id === id ? { ...r, institutionNotes: notes } : r
+        )
+      );
+    } catch (err) {
+      console.error("Error updating notes:", err);
+      alert("Failed to update notes");
+    }
+  };
+
+  const filteredReports = reports.filter(
+    (r) => filter === "all" || r.status === filter
+  );
 
   const stats = {
     total: reports.length,
-    pending: reports.filter(r => r.status === 'pending').length,
-    inProgress: reports.filter(r => r.status === 'in-progress').length,
-    resolved: reports.filter(r => r.status === 'resolved').length,
+    pending: reports.filter((r) => r.status === "pending").length,
+    inProgress: reports.filter((r) => r.status === "in-progress").length,
+    resolved: reports.filter((r) => r.status === "resolved").length,
   };
-
-  const handleStatusUpdate = (id, newStatus) => {
-    setReports(reports.map(r => 
-      r.id === id ? { ...r, status: newStatus } : r
-    ));
-  };
-
-  const handleAssignment = (id, officer) => {
-    setReports(reports.map(r => 
-      r.id === id ? { ...r, assignedTo: officer, status: 'in-progress' } : r
-    ));
-  };
-
-  const handleNotesUpdate = (id, notes) => {
-    setReports(reports.map(r => 
-      r.id === id ? { ...r, institutionNotes: notes } : r
-    ));
-  };
-
-  const filteredReports = reports.filter(r => 
-    filter === 'all' || r.status === filter
-  );
 
   const getPriorityColor = (priority) => {
     const colors = {
-      critical: 'bg-red-500',
-      high: 'bg-orange-500',
-      medium: 'bg-yellow-500',
-      low: 'bg-green-500',
+      critical: "bg-red-500",
+      high: "bg-orange-500",
+      medium: "bg-yellow-500",
+      low: "bg-green-500",
     };
-    return colors[priority] || 'bg-gray-500';
+    return colors[priority] || "bg-gray-500";
   };
 
   const getPriorityButtonColor = (priority) => {
-    return 'bg-[#2F575D] hover:bg-[#28363D]';
+    return "bg-[#2F575D] hover:bg-[#28363D]";
   };
 
   return (
     <div className="min-h-screen bg-[#CEE1DD]">
-      <Navbar />
-      
-      <div className="pt-16 px-6 py-8">
+      <div className="pt-4 px-6 py-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
+          {/* Header with Institution Info */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-[#28363D] mb-2">Institution Dashboard</h1>
-            <p className="text-[#2F575D]">Monitor and manage community safety reports</p>
+            {institutionData && (
+              <div className="bg-gradient-to-r from-[#658B6F] to-[#6D9197] rounded-lg p-6 mb-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">{institutionData.institutionName}</h2>
+                    <p className="text-sm opacity-90">{institutionData.institutionType}</p>
+                    <p className="text-xs opacity-75 mt-1">{institutionData.officialEmail}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="inline-flex items-center px-3 py-1 rounded-full bg-white bg-opacity-20 text-sm">
+                      {institutionData.isVerified ? (
+                        <><span className="mr-2">✓</span> Verified</>
+                      ) : (
+                        <><span className="mr-2">⏳</span> Pending Verification</>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <h1 className="text-3xl font-bold text-[#28363D] mb-2">
+              Institution Dashboard
+            </h1>
+            <p className="text-[#2F575D]">
+              Monitor and manage community safety reports
+            </p>
           </div>
 
           {/* Stats Cards */}
@@ -153,10 +197,16 @@ const InstitutionDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[#2F575D] text-sm mb-1">Total Reports</p>
-                  <p className="text-3xl font-bold text-[#28363D]">{stats.total}</p>
+                  <p className="text-3xl font-bold text-[#28363D]">
+                    {stats.total}
+                  </p>
                 </div>
                 <div className="bg-[#CEE1DD] p-4 rounded-lg">
-                  <img src="/assets/images/siren.png" alt="Reports" className="w-8 h-8" />
+                  <img
+                    src="/assets/images/siren.png"
+                    alt="Reports"
+                    className="w-8 h-8"
+                  />
                 </div>
               </div>
             </div>
@@ -165,10 +215,16 @@ const InstitutionDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[#2F575D] text-sm mb-1">Pending Action</p>
-                  <p className="text-3xl font-bold text-[#28363D]">{stats.pending}</p>
+                  <p className="text-3xl font-bold text-[#28363D]">
+                    {stats.pending}
+                  </p>
                 </div>
                 <div className="bg-[#CEE1DD] p-4 rounded-lg">
-                  <img src="/assets/images/question.png" alt="Pending" className="w-8 h-8" />
+                  <img
+                    src="/assets/images/question.png"
+                    alt="Pending"
+                    className="w-8 h-8"
+                  />
                 </div>
               </div>
             </div>
@@ -177,10 +233,16 @@ const InstitutionDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[#2F575D] text-sm mb-1">In Progress</p>
-                  <p className="text-3xl font-bold text-[#28363D]">{stats.inProgress}</p>
+                  <p className="text-3xl font-bold text-[#28363D]">
+                    {stats.inProgress}
+                  </p>
                 </div>
                 <div className="bg-[#CEE1DD] p-4 rounded-lg">
-                  <img src="/assets/images/magnifying-glass.png" alt="In Progress" className="w-8 h-8" />
+                  <img
+                    src="/assets/images/magnifying-glass.png"
+                    alt="In Progress"
+                    className="w-8 h-8"
+                  />
                 </div>
               </div>
             </div>
@@ -189,11 +251,17 @@ const InstitutionDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[#2F575D] text-sm mb-1">Resolved</p>
-                  <p className="text-3xl font-bold text-[#28363D]">{stats.resolved}</p>
+                  <p className="text-3xl font-bold text-[#28363D]">
+                    {stats.resolved}
+                  </p>
                 </div>
                 <div className="bg-[#CEE1DD] p-4 rounded-lg">
-                  <svg className="w-8 h-8 text-[#658B6F]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  <svg
+                    className="w-8 h-8 text-[#658B6F]"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
                 </div>
               </div>
@@ -204,18 +272,18 @@ const InstitutionDashboard = () => {
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <div className="flex flex-wrap gap-3">
               {[
-                { value: 'all', label: 'All Reports' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'in-progress', label: 'In Progress' },
-                { value: 'resolved', label: 'Resolved' },
+                { value: "all", label: "All Reports" },
+                { value: "pending", label: "Pending" },
+                { value: "in-progress", label: "In Progress" },
+                { value: "resolved", label: "Resolved" },
               ].map(({ value, label }) => (
                 <button
                   key={value}
                   onClick={() => setFilter(value)}
                   className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                     filter === value
-                      ? 'bg-[#658B6F] text-white shadow-lg'
-                      : 'bg-[#CEE1DD] text-[#28363D] hover:bg-[#C4CDC1]'
+                      ? "bg-[#658B6F] text-white shadow-lg"
+                      : "bg-[#CEE1DD] text-[#28363D] hover:bg-[#C4CDC1]"
                   }`}
                 >
                   {label}
@@ -226,98 +294,187 @@ const InstitutionDashboard = () => {
 
           {/* Reports Table */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[#28363D] text-white">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Threat Level</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Type</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Title</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Location</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Community Vote</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Assigned To</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#CEE1DD]">
-                  {filteredReports.map((report) => (
-                    <tr key={report.id} className="hover:bg-[#CEE1DD] transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-block w-3 h-3 rounded-full ${getPriorityColor(report.priority)}`}></span>
-                          <span className={`text-xs font-bold uppercase ${
-                            report.priority === 'critical' ? 'text-red-600' :
-                            report.priority === 'high' ? 'text-orange-600' :
-                            report.priority === 'medium' ? 'text-yellow-600' :
-                            'text-green-600'
-                          }`}>
-                            {report.priority}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <img 
-                          src={{
-                            crime: '/assets/images/handcuff.png',
-                            missing: '/assets/images/question.png',
-                            'dog-attack': '/assets/images/pets.png',
-                            natural: '/assets/images/flood.png'
-                          }[report.type]}
-                          alt={report.type}
-                          className="w-8 h-8"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-[#28363D]">{report.title}</div>
-                        <div className="text-xs text-[#2F575D]">{report.date}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-[#2F575D] max-w-xs truncate">
-                        {report.address}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1">
-                            <img src="/assets/images/upVote.png" alt="Upvote" className="w-4 h-4" />
-                            <span className="font-semibold text-gray-900">{report.upvotes}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <img src="/assets/images/downVote.png" alt="Downvote" className="w-4 h-4" />
-                            <span className="font-semibold text-gray-900">{report.downvotes}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                          report.status === 'pending' ? 'bg-[#779e9c] text-white' :
-                          report.status === 'in-progress' ? 'bg-[#1ab5d0] text-white' :
-                          report.status === 'resolved' ? 'bg-[#250cb2] text-white' :    
-                          'bg-gray-400 text-white'
-                        }`}>
-                          {report.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-[#2F575D]">
-                        {report.assignedTo || 'Unassigned'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setSelectedIncident(report)}
-                          className={`text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors border-4 ${getPriorityButtonColor(report.priority)} ${
-                            report.status === 'pending' ? '' :
-                            report.status === 'in-progress' ? '' :
-                            report.status === 'resolved' ? '' :
-                            'border-gray-400'
-                          }`}
-                        >
-                          Review
-                        </button>
-                      </td>
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#658B6F] mx-auto mb-4"></div>
+                  <p className="text-[#2F575D]">Loading reports...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 m-4 rounded">
+                <p className="mb-3">{error}</p>
+                <button
+                  onClick={fetchReports}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !error && reports.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-[#2F575D]">No reports found</p>
+              </div>
+            )}
+
+            {/* Table Content */}
+            {!loading && !error && reports.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[#28363D] text-white">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Threat Level
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Type
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Title
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Location
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Community Vote
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Assigned To
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[#CEE1DD]">
+                    {filteredReports.map((report) => (
+                      <tr
+                        key={report.id}
+                        className="hover:bg-[#CEE1DD] transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-block w-3 h-3 rounded-full ${getPriorityColor(
+                                report.priority
+                              )}`}
+                            ></span>
+                            <span
+                              className={`text-xs font-bold uppercase ${
+                                report.priority === "critical"
+                                  ? "text-red-600"
+                                  : report.priority === "high"
+                                  ? "text-orange-600"
+                                  : report.priority === "medium"
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                              }`}
+                            >
+                              {report.priority}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <img
+                            src={
+                              {
+                                crime: "/assets/images/handcuff.png",
+                                missing: "/assets/images/question.png",
+                                "dog-attack": "/assets/images/pets.png",
+                                natural: "/assets/images/flood.png",
+                              }[report.type]
+                            }
+                            alt={report.type}
+                            className="w-8 h-8"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-[#28363D]">
+                            {report.title}
+                          </div>
+                          <div className="text-xs text-[#2F575D]">
+                            {report.date}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-[#2F575D] max-w-xs truncate">
+                          {report.address}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <img
+                                src="/assets/images/upVote.png"
+                                alt="Upvote"
+                                className="w-4 h-4"
+                              />
+                              <span className="font-semibold text-gray-900">
+                                {report.upvotes}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <img
+                                src="/assets/images/downVote.png"
+                                alt="Downvote"
+                                className="w-4 h-4"
+                              />
+                              <span className="font-semibold text-gray-900">
+                                {report.downvotes}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                              report.status === "pending"
+                                ? "bg-[#779e9c] text-white"
+                                : report.status === "in-progress"
+                                ? "bg-[#1ab5d0] text-white"
+                                : report.status === "resolved"
+                                ? "bg-[#250cb2] text-white"
+                                : "bg-gray-400 text-white"
+                            }`}
+                          >
+                            {report.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-[#2F575D]">
+                          {report.assignedTo || "Unassigned"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedIncident(report)}
+                            className={`text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors border-4 ${getPriorityButtonColor(
+                              report.priority
+                            )} ${
+                              report.status === "pending"
+                                ? ""
+                                : report.status === "in-progress"
+                                ? ""
+                                : report.status === "resolved"
+                                ? ""
+                                : "border-gray-400"
+                            }`}
+                          >
+                            Review
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -332,68 +489,133 @@ const InstitutionDashboard = () => {
                 onClick={() => setSelectedIncident(null)}
                 className="text-white hover:text-[#CEE1DD] transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
 
             <div className="p-6 space-y-6">
               <div>
-                <h3 className="text-xl font-bold text-[#28363D] mb-2">{selectedIncident.title}</h3>
+                <h3 className="text-xl font-bold text-[#28363D] mb-2">
+                  {selectedIncident.title}
+                </h3>
                 <p className="text-[#2F575D]">{selectedIncident.description}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Threat Level</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Threat Level
+                  </label>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-block w-3 h-3 rounded-full ${getPriorityColor(selectedIncident.priority)}`}></span>
-                    <span className={`text-sm font-bold uppercase ${
-                      selectedIncident.priority === 'critical' ? 'text-red-600' :
-                      selectedIncident.priority === 'high' ? 'text-orange-600' :
-                      selectedIncident.priority === 'medium' ? 'text-yellow-600' :
-                      'text-green-600'
-                    }`}>
+                    <span
+                      className={`inline-block w-3 h-3 rounded-full ${getPriorityColor(
+                        selectedIncident.priority
+                      )}`}
+                    ></span>
+                    <span
+                      className={`text-sm font-bold uppercase ${
+                        selectedIncident.priority === "critical"
+                          ? "text-red-600"
+                          : selectedIncident.priority === "high"
+                          ? "text-orange-600"
+                          : selectedIncident.priority === "medium"
+                          ? "text-yellow-600"
+                          : "text-green-600"
+                      }`}
+                    >
                       {selectedIncident.priority}
                     </span>
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Reporter</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Reporter
+                  </label>
                   <p className="text-[#28363D]">{selectedIncident.reporter}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Location</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Location
+                  </label>
                   <p className="text-[#28363D]">{selectedIncident.address}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Date</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Date
+                  </label>
                   <p className="text-[#28363D]">{selectedIncident.date}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Community Votes</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Community Votes
+                  </label>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1">
-                      <img src="/assets/images/upVote.png" alt="Upvote" className="w-5 h-5" />
-                      <span className="font-semibold text-gray-900">{selectedIncident.upvotes}</span>
+                      <img
+                        src="/assets/images/upVote.png"
+                        alt="Upvote"
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold text-gray-900">
+                        {selectedIncident.upvotes}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <img src="/assets/images/downVote.png" alt="Downvote" className="w-5 h-5" />
-                      <span className="font-semibold text-gray-900">{selectedIncident.downvotes}</span>
+                      <img
+                        src="/assets/images/downVote.png"
+                        alt="Downvote"
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold text-gray-900">
+                        {selectedIncident.downvotes}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-[#2F575D]">Proof Uploaded</label>
+                  <label className="text-sm font-semibold text-[#2F575D]">
+                    Proof Uploaded
+                  </label>
                   {selectedIncident.proof ? (
                     <button
-                      onClick={() => window.open(`/uploads/${selectedIncident.proof}`, '_blank')}
+                      onClick={() =>
+                        window.open(
+                          `/uploads/${selectedIncident.proof}`,
+                          "_blank"
+                        )
+                      }
                       className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                        />
                       </svg>
                       View Evidence
                     </button>
@@ -404,10 +626,14 @@ const InstitutionDashboard = () => {
               </div>
 
               <div>
-                <label className="block text-[#28363D] font-semibold mb-2">Update Status</label>
+                <label className="block text-[#28363D] font-semibold mb-2">
+                  Update Status
+                </label>
                 <select
                   value={selectedIncident.status}
-                  onChange={(e) => handleStatusUpdate(selectedIncident.id, e.target.value)}
+                  onChange={(e) =>
+                    handleStatusUpdate(selectedIncident.id, e.target.value)
+                  }
                   className="w-full px-4 py-3 rounded-lg border-2 border-[#C4CDC1] focus:border-[#658B6F] focus:outline-none"
                 >
                   <option value="pending">Pending</option>
@@ -417,21 +643,29 @@ const InstitutionDashboard = () => {
               </div>
 
               <div>
-                <label className="block text-[#28363D] font-semibold mb-2">Assign To</label>
+                <label className="block text-[#28363D] font-semibold mb-2">
+                  Assign To
+                </label>
                 <input
                   type="text"
-                  value={selectedIncident.assignedTo || ''}
-                  onChange={(e) => handleAssignment(selectedIncident.id, e.target.value)}
+                  value={selectedIncident.assignedTo || ""}
+                  onChange={(e) =>
+                    handleAssignment(selectedIncident.id, e.target.value)
+                  }
                   placeholder="Officer name or team"
                   className="w-full px-4 py-3 rounded-lg border-2 border-[#C4CDC1] focus:border-[#658B6F] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[#28363D] font-semibold mb-2">Institution Notes</label>
+                <label className="block text-[#28363D] font-semibold mb-2">
+                  Institution Notes
+                </label>
                 <textarea
                   value={selectedIncident.institutionNotes}
-                  onChange={(e) => handleNotesUpdate(selectedIncident.id, e.target.value)}
+                  onChange={(e) =>
+                    handleNotesUpdate(selectedIncident.id, e.target.value)
+                  }
                   placeholder="Add internal notes about actions taken"
                   rows={4}
                   className="w-full px-4 py-3 rounded-lg border-2 border-[#C4CDC1] focus:border-[#658B6F] focus:outline-none resize-none"

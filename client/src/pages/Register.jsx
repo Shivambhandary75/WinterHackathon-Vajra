@@ -3,24 +3,27 @@ import { Link, useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import axiosInstance from "../utils/axiosInstance";
 
 const Register = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    state: '',
-    city: '',
+    fullName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    state: "",
+    city: "",
     agreeToTerms: false,
   });
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    const value =
+      e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setFormData({
       ...formData,
       [e.target.name]: value,
@@ -29,7 +32,7 @@ const Register = () => {
     if (errors[e.target.name]) {
       setErrors({
         ...errors,
-        [e.target.name]: '',
+        [e.target.name]: "",
       });
     }
   };
@@ -37,17 +40,17 @@ const Register = () => {
   const validateStep1 = () => {
     const newErrors = {};
     if (!formData.fullName) {
-      newErrors.fullName = 'Full name is required';
+      newErrors.fullName = "Full name is required";
     }
     if (!formData.email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = "Email is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+      newErrors.email = "Email is invalid";
     }
     if (!formData.phone) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^[0-9]{10}$/.test(formData.phone.replace(/\s/g, ''))) {
-      newErrors.phone = 'Phone number must be 10 digits';
+      newErrors.phone = "Phone number is required";
+    } else if (!/^[0-9]{10}$/.test(formData.phone.replace(/\s/g, ""))) {
+      newErrors.phone = "Phone number must be 10 digits";
     }
     return newErrors;
   };
@@ -55,23 +58,23 @@ const Register = () => {
   const validateStep2 = () => {
     const newErrors = {};
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = "Password is required";
     } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+      newErrors.password = "Password must be at least 8 characters";
     }
     if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
+      newErrors.confirmPassword = "Please confirm your password";
     } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = "Passwords do not match";
     }
     if (!formData.state) {
-      newErrors.state = 'State is required';
+      newErrors.state = "State is required";
     }
     if (!formData.city) {
-      newErrors.city = 'City is required';
+      newErrors.city = "City is required";
     }
     if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
+      newErrors.agreeToTerms = "You must agree to the terms and conditions";
     }
     return newErrors;
   };
@@ -85,24 +88,46 @@ const Register = () => {
     setStep(2);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const newErrors = validateStep2();
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    // Handle registration logic here
-    console.log('Registration submitted:', formData);
-    
-    // Store user data and give immediate access
-    localStorage.setItem('userType', 'user');
-    localStorage.setItem('userEmail', formData.email);
-    
-    // Redirect to dashboard immediately
-    navigate('/dashboard');
+    try {
+      setLoading(true);
+      const response = await axiosInstance.post("/auth/signup", {
+        name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        state: formData.state,
+        city: formData.city,
+      });
+
+      // Save token and user info to localStorage
+      const { token, user } = response.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("userType", "user");
+      localStorage.setItem("userEmail", user.email);
+      localStorage.setItem("userName", user.name);
+
+      // Redirect to dashboard
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Registration error:", error);
+      setErrors({
+        general:
+          error.response?.data?.message ||
+          "Registration failed. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -114,29 +139,57 @@ const Register = () => {
             <div className="w-12 h-12 bg-[#658B6F] rounded-lg"></div>
             <span className="text-[#28363D] text-2xl font-bold">SafetyNet</span>
           </Link>
-          <h1 className="text-3xl font-bold text-[#28363D] mb-2">Create Your Account</h1>
-          <p className="text-[#6D9197]">Join the community and help make India safer</p>
+          <h1 className="text-3xl font-bold text-[#28363D] mb-2">
+            Create Your Account
+          </h1>
+          <p className="text-[#6D9197]">
+            Join the community and help make India safer
+          </p>
         </div>
 
         {/* Progress Indicator */}
         <div className="mb-10">
           <div className="flex items-center justify-center space-x-6">
-            <div className={`flex items-center ${step >= 1 ? 'text-[#658B6F]' : 'text-[#C4CDC1]'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                step >= 1 ? 'bg-[#658B6F] text-white' : 'bg-[#C4CDC1] text-white'
-              }`}>
+            <div
+              className={`flex items-center ${
+                step >= 1 ? "text-[#658B6F]" : "text-[#C4CDC1]"
+              }`}
+            >
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                  step >= 1
+                    ? "bg-[#658B6F] text-white"
+                    : "bg-[#C4CDC1] text-white"
+                }`}
+              >
                 1
               </div>
-              <span className="ml-2 font-medium hidden sm:inline">Personal Info</span>
+              <span className="ml-2 font-medium hidden sm:inline">
+                Personal Info
+              </span>
             </div>
-            <div className={`h-1 w-24 ${step >= 2 ? 'bg-[#658B6F]' : 'bg-[#C4CDC1]'}`}></div>
-            <div className={`flex items-center ${step >= 2 ? 'text-[#658B6F]' : 'text-[#C4CDC1]'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                step >= 2 ? 'bg-[#658B6F] text-white' : 'bg-[#C4CDC1] text-white'
-              }`}>
+            <div
+              className={`h-1 w-24 ${
+                step >= 2 ? "bg-[#658B6F]" : "bg-[#C4CDC1]"
+              }`}
+            ></div>
+            <div
+              className={`flex items-center ${
+                step >= 2 ? "text-[#658B6F]" : "text-[#C4CDC1]"
+              }`}
+            >
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                  step >= 2
+                    ? "bg-[#658B6F] text-white"
+                    : "bg-[#C4CDC1] text-white"
+                }`}
+              >
                 2
               </div>
-              <span className="ml-2 font-medium hidden sm:inline">Account Setup</span>
+              <span className="ml-2 font-medium hidden sm:inline">
+                Account Setup
+              </span>
             </div>
           </div>
         </div>
@@ -190,6 +243,13 @@ const Register = () => {
 
             {step === 2 && (
               <div className="space-y-8">
+                {/* General Error Message */}
+                {errors.general && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    {errors.general}
+                  </div>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-8">
                   <Input
                     label="State"
@@ -241,10 +301,13 @@ const Register = () => {
                 />
 
                 <div className="bg-[#CEE1DD] p-4 rounded-lg">
-                  <h4 className="font-semibold text-[#28363D] mb-2">Verification Required</h4>
+                  <h4 className="font-semibold text-[#28363D] mb-2">
+                    Verification Required
+                  </h4>
                   <p className="text-sm text-[#6D9197]">
-                    After registration, you'll need to verify your identity using government-issued ID 
-                    or location-based verification to ensure authentic reporting and community safety.
+                    After registration, you'll need to verify your identity
+                    using government-issued ID or location-based verification to
+                    ensure authentic reporting and community safety.
                   </p>
                 </div>
 
@@ -258,18 +321,26 @@ const Register = () => {
                       className="w-4 h-4 mt-1 text-[#658B6F] border-[#C4CDC1] rounded focus:ring-[#658B6F]"
                     />
                     <span className="ml-2 text-sm text-[#6D9197]">
-                      I agree to the{' '}
-                      <a href="#" className="text-[#658B6F] hover:text-[#6D9197] transition-colors">
+                      I agree to the{" "}
+                      <a
+                        href="#"
+                        className="text-[#658B6F] hover:text-[#6D9197] transition-colors"
+                      >
                         Terms and Conditions
-                      </a>{' '}
-                      and{' '}
-                      <a href="#" className="text-[#658B6F] hover:text-[#6D9197] transition-colors">
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        href="#"
+                        className="text-[#658B6F] hover:text-[#6D9197] transition-colors"
+                      >
                         Privacy Policy
                       </a>
                     </span>
                   </label>
                   {errors.agreeToTerms && (
-                    <p className="text-red-500 text-sm mt-1">{errors.agreeToTerms}</p>
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors.agreeToTerms}
+                    </p>
                   )}
                 </div>
 
@@ -279,11 +350,12 @@ const Register = () => {
                     variant="outline"
                     onClick={() => setStep(1)}
                     className="w-full"
+                    disabled={loading}
                   >
                     Back
                   </Button>
-                  <Button type="submit" className="w-full">
-                    Create Account
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Creating Account..." : "Create Account"}
                   </Button>
                 </div>
               </div>
@@ -295,21 +367,20 @@ const Register = () => {
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-[#C4CDC1]"></div>
                   </div>
-                  
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  
-                 
-                </div>
+                <div className="grid grid-cols-2 gap-4"></div>
               </>
             )}
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-sm text-[#6D9197]">
-              Already have an account?{' '}
-              <Link to="/login" className="text-[#658B6F] hover:text-[#6D9197] font-semibold transition-colors">
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                className="text-[#658B6F] hover:text-[#6D9197] font-semibold transition-colors"
+              >
                 Sign in
               </Link>
             </p>
@@ -317,8 +388,11 @@ const Register = () => {
 
           <div className="mt-6 border-t border-[#CEE1DD] pt-6">
             <p className="text-xs text-center text-[#99AEAD]">
-              Government Institution?{' '}
-              <Link to="/institution-register" className="text-[#658B6F] hover:text-[#6D9197] transition-colors">
+              Government Institution?{" "}
+              <Link
+                to="/institution-register"
+                className="text-[#658B6F] hover:text-[#6D9197] transition-colors"
+              >
                 Register here
               </Link>
             </p>
@@ -328,7 +402,8 @@ const Register = () => {
         {/* Security Notice */}
         <div className="mt-6 text-center">
           <p className="text-xs text-[#6D9197]">
-            Your information is protected with bank-level security. We never share your personal data.
+            Your information is protected with bank-level security. We never
+            share your personal data.
           </p>
         </div>
       </div>
