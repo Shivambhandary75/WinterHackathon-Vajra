@@ -160,3 +160,197 @@ exports.GetMe = async (req, res) => {
     });
   }
 };
+
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+// @access  Private
+exports.UpdateProfile = async (req, res) => {
+  try {
+    const { name, phone, city, state, bio, avatar, website, username } = req.body;
+
+    // Build update object
+    const updateData = {};
+
+    if (name) {
+      if (name.length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name cannot be more than 50 characters'
+        });
+      }
+      updateData.name = name;
+    }
+
+    if (phone) {
+      // Check if phone is already taken by another user
+      const existingUser = await User.findOne({ 
+        phone, 
+        _id: { $ne: req.user.id } 
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already in use'
+        });
+      }
+      updateData.phone = phone;
+    }
+
+    if (city) {
+      if (city.length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'City cannot be more than 50 characters'
+        });
+      }
+      updateData.city = city;
+    }
+
+    if (state) {
+      if (state.length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'State cannot be more than 50 characters'
+        });
+      }
+      updateData.state = state;
+    }
+
+    if (bio) {
+      if (bio.length > 500) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bio cannot be more than 500 characters'
+        });
+      }
+      updateData.bio = bio;
+    }
+
+    if (avatar) {
+      updateData.avatar = avatar;
+    }
+
+    if (website) {
+      updateData.website = website;
+    }
+
+    if (username) {
+      // Check if username is already taken
+      const existingUsername = await User.findOne({ 
+        username, 
+        _id: { $ne: req.user.id } 
+      });
+      if (existingUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username already taken'
+        });
+      }
+      updateData.username = username;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors)
+        .map(err => err.message)
+        .join(', ');
+      return res.status(400).json({
+        success: false,
+        message: messages
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Profile update failed'
+    });
+  }
+};
+
+// @desc    Change password
+// @route   PUT /api/auth/change-password
+// @access  Private
+exports.ChangePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    // Validation
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide current password, new password, and confirmation'
+      });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New passwords do not match'
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long'
+      });
+    }
+
+    // Get user with password field
+    const user = await User.findById(req.user.id).select('+password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Verify current password
+    const isMatch = await user.matchPassword(currentPassword);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Check if new password is same as current password
+    const isSameAsOld = await user.matchPassword(newPassword);
+    if (isSameAsOld) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be different from current password'
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Change Password Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Password change failed'
+    });
+  }
+};
