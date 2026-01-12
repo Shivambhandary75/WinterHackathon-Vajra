@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
 
 const Register = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -95,6 +96,13 @@ const Register = () => {
 
     // Handle registration logic here
     console.log('Registration submitted:', formData);
+    
+    // Store user data and give immediate access
+    localStorage.setItem('userType', 'user');
+    localStorage.setItem('userEmail', formData.email);
+    
+    // Redirect to dashboard immediately
+    navigate('/dashboard');
   };
 
   return (
@@ -303,6 +311,15 @@ const Register = () => {
               Already have an account?{' '}
               <Link to="/login" className="text-[#658B6F] hover:text-[#6D9197] font-semibold transition-colors">
                 Sign in
+              </Link>
+            </p>
+          </div>
+
+          <div className="mt-6 border-t border-[#CEE1DD] pt-6">
+            <p className="text-xs text-center text-[#99AEAD]">
+              Government Institution?{' '}
+              <Link to="/institution-register" className="text-[#658B6F] hover:text-[#6D9197] transition-colors">
+                Register here
               </Link>
             </p>
           </div>
