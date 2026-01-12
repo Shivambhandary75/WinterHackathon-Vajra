@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -46,6 +47,13 @@ const Login = () => {
 
     // Handle login logic here
     console.log('Login submitted:', formData);
+    
+    // Set regular user flag in localStorage
+    localStorage.setItem('userType', 'user');
+    localStorage.setItem('userEmail', formData.email);
+    
+    // Redirect to user dashboard
+    navigate('/dashboard');
   };
 
   return (
@@ -120,6 +128,15 @@ const Login = () => {
               Don't have an account?{' '}
               <Link to="/register" className="text-[#658B6F] hover:text-[#6D9197] font-semibold transition-colors">
                 Sign up
+              </Link>
+            </p>
+          </div>
+
+          <div className="mt-6 border-t border-[#CEE1DD] pt-6">
+            <p className="text-xs text-center text-[#99AEAD]">
+              Government Institution?{' '}
+              <Link to="/institution-login" className="text-[#658B6F] hover:text-[#6D9197] transition-colors">
+                Login here
               </Link>
             </p>
           </div>
