@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import axiosInstance from '../utils/axiosInstance';
 
 const EditInstitutionProfile = () => {
   const navigate = useNavigate();
@@ -18,14 +19,11 @@ const EditInstitutionProfile = () => {
     state: '',
     city: '',
     pincode: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmNewPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
-  const [changePassword, setChangePassword] = useState(false);
 
   const institutionTypes = [
     'Police Department',
@@ -39,22 +37,50 @@ const EditInstitutionProfile = () => {
 
   // Load institution data on component mount
   useEffect(() => {
-    // TODO: Fetch institution data from API/localStorage
-    const institutionData = {
-      institutionName: 'Mumbai Police Department',
-      institutionType: 'Police Department',
-      registrationNumber: 'REG123456',
-      officialEmail: 'contact@mumbaipolice.gov.in',
-      contactPerson: 'Officer Kumar',
-      designation: 'Senior Inspector',
-      phone: '9876543210',
-      address: 'Crawford Market, Mumbai',
-      state: 'Maharashtra',
-      city: 'Mumbai',
-      pincode: '400001',
-    };
-    setFormData(prev => ({ ...prev, ...institutionData }));
+    fetchInstitutionProfile();
   }, []);
+
+  const fetchInstitutionProfile = async () => {
+    try {
+      setIsFetching(true);
+      setErrors({});
+      
+      console.log('Fetching institution profile...');
+      const response = await axiosInstance.get('/institutions/me');
+      console.log('Profile response:', response.data);
+      
+      if (response.data.success) {
+        const institution = response.data.data;
+        const newFormData = {
+          institutionName: institution.institutionName || '',
+          institutionType: institution.institutionType || '',
+          registrationNumber: institution.registrationNumber || '',
+          officialEmail: institution.officialEmail || '',
+          contactPerson: institution.contactPerson?.name || '',
+          designation: institution.contactPerson?.designation || '',
+          phone: institution.contactPerson?.phone || '',
+          address: institution.address?.street || '',
+          state: institution.address?.state || '',
+          city: institution.address?.city || '',
+          pincode: institution.address?.pincode || '',
+        };
+        console.log('Setting form data:', newFormData);
+        setFormData(newFormData);
+      }
+    } catch (error) {
+      console.error('Error fetching institution profile:', error);
+      console.error('Error response:', error.response);
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        setErrors({ general: 'Session expired. Please login again.' });
+        setTimeout(() => navigate('/institution-login'), 2000);
+      } else {
+        setErrors({ general: error.response?.data?.message || 'Failed to load profile data.' });
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   const handleChange = (e) => {
     const value = e.target.value;
@@ -123,25 +149,6 @@ const EditInstitutionProfile = () => {
     } else if (!/^[0-9]{6}$/.test(formData.pincode)) {
       newErrors.pincode = 'Pincode must be 6 digits';
     }
-
-    // Password validation (only if changing password)
-    if (changePassword) {
-      if (!formData.currentPassword) {
-        newErrors.currentPassword = 'Current password is required';
-      }
-      
-      if (!formData.newPassword) {
-        newErrors.newPassword = 'New password is required';
-      } else if (formData.newPassword.length < 8) {
-        newErrors.newPassword = 'Password must be at least 8 characters';
-      }
-      
-      if (!formData.confirmNewPassword) {
-        newErrors.confirmNewPassword = 'Please confirm your new password';
-      } else if (formData.newPassword !== formData.confirmNewPassword) {
-        newErrors.confirmNewPassword = 'Passwords do not match';
-      }
-    }
     
     return newErrors;
   };
@@ -149,6 +156,7 @@ const EditInstitutionProfile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSuccessMessage('');
+    setErrors({});
     
     const newErrors = validateForm();
     if (Object.keys(newErrors).length > 0) {
@@ -159,56 +167,81 @@ const EditInstitutionProfile = () => {
     setIsLoading(true);
     
     try {
-      // TODO: API call to update profile
-      console.log('Institution profile update submitted:', formData);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccessMessage('Institution profile updated successfully!');
-      
-      // Clear password fields after successful update
-      if (changePassword) {
-        setFormData(prev => ({
-          ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmNewPassword: '',
-        }));
-        setChangePassword(false);
+      // Update profile information
+      const profileData = {
+        contactPerson: formData.contactPerson.trim(),
+        designation: formData.designation.trim(),
+        phone: formData.phone.replace(/\D/g, ''), // Remove non-digits
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        pincode: formData.pincode.replace(/\D/g, ''), // Remove non-digits
+      };
+
+      console.log('Updating profile with data:', profileData);
+      const response = await axiosInstance.put('/institutions/profile', profileData);
+      console.log('Update response:', response.data);
+
+      if (response.data.success) {
+        setSuccessMessage('Institution profile updated successfully!');
+        
+        // Update localStorage with new name if needed
+        localStorage.setItem("institutionName", formData.institutionName);
+        
+        // Refresh the profile data after a short delay
+        setTimeout(() => {
+          fetchInstitutionProfile();
+          // Scroll to top to show success message
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 500);
       }
     } catch (error) {
-      setErrors({ submit: 'Failed to update profile. Please try again.' });
+      console.error('Profile update error:', error);
+      console.error('Error details:', error.response?.data);
+      setErrors({ 
+        general: error.response?.data?.message || error.message || 'Failed to update profile. Please try again.' 
+      });
+      // Scroll to top to show error message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Edit Institution Profile</h1>
           <p className="text-gray-600">Update your institution information</p>
         </div>
 
-        <Card className="p-8">
-          {successMessage && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
-              {successMessage}
+        {isFetching ? (
+          <Card className="p-8">
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading profile data...</p>
             </div>
-          )}
+          </Card>
+        ) : (
+          <Card className="p-8">
+            {successMessage && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
+                {successMessage}
+              </div>
+            )}
 
-          {errors.submit && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {errors.submit}
-            </div>
-          )}
+            {errors.general && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                {errors.general}
+              </div>
+            )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Institution Details */}
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Institution Details</h2>
+              <p className="text-sm text-gray-500 mb-4">These fields are read-only and cannot be changed.</p>
               
               <div className="space-y-4">
                 <Input
@@ -219,6 +252,7 @@ const EditInstitutionProfile = () => {
                   onChange={handleChange}
                   error={errors.institutionName}
                   required
+                  disabled
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -230,8 +264,9 @@ const EditInstitutionProfile = () => {
                       name="institutionType"
                       value={formData.institutionType}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100 cursor-not-allowed"
                       required
+                      disabled
                     >
                       <option value="">Select Type</option>
                       {institutionTypes.map((type) => (
@@ -253,6 +288,7 @@ const EditInstitutionProfile = () => {
                     onChange={handleChange}
                     error={errors.registrationNumber}
                     required
+                    disabled
                   />
                 </div>
 
@@ -264,6 +300,7 @@ const EditInstitutionProfile = () => {
                   onChange={handleChange}
                   error={errors.officialEmail}
                   required
+                  disabled
                 />
               </div>
             </div>
@@ -358,55 +395,6 @@ const EditInstitutionProfile = () => {
               </div>
             </div>
 
-            {/* Change Password Section */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Change Password</h2>
-                <button
-                  type="button"
-                  onClick={() => setChangePassword(!changePassword)}
-                  className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                >
-                  {changePassword ? 'Cancel' : 'Change Password'}
-                </button>
-              </div>
-
-              {changePassword && (
-                <div className="space-y-4">
-                  <Input
-                    label="Current Password"
-                    type="password"
-                    name="currentPassword"
-                    value={formData.currentPassword}
-                    onChange={handleChange}
-                    error={errors.currentPassword}
-                    required={changePassword}
-                  />
-
-                  <Input
-                    label="New Password"
-                    type="password"
-                    name="newPassword"
-                    value={formData.newPassword}
-                    onChange={handleChange}
-                    error={errors.newPassword}
-                    placeholder="At least 8 characters"
-                    required={changePassword}
-                  />
-
-                  <Input
-                    label="Confirm New Password"
-                    type="password"
-                    name="confirmNewPassword"
-                    value={formData.confirmNewPassword}
-                    onChange={handleChange}
-                    error={errors.confirmNewPassword}
-                    required={changePassword}
-                  />
-                </div>
-              )}
-            </div>
-
             {/* Action Buttons */}
             <div className="flex gap-4 pt-4">
               <Button
@@ -429,6 +417,7 @@ const EditInstitutionProfile = () => {
             </div>
           </form>
         </Card>
+        )}
       </div>
     </div>
   );

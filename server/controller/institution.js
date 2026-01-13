@@ -1,10 +1,10 @@
-const Institution = require('../models/Institution');
-const jwt = require('jsonwebtoken');
+const Institution = require("../models/Institution");
+const jwt = require("jsonwebtoken");
 
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d',
+    expiresIn: process.env.JWT_EXPIRE || "7d",
   });
 };
 
@@ -28,33 +28,60 @@ exports.registerInstitution = async (req, res) => {
       city,
       state,
       pincode,
-      password
+      password,
     } = req.body;
 
     // Validation
-    if (!institutionName || !institutionType || !registrationNumber || 
-        !institutionId || !officialEmail || !contactPerson || 
-        !designation || !phone || !address || !city || !state || 
-        !pincode || !password) {
+    if (
+      !institutionName ||
+      !institutionType ||
+      !registrationNumber ||
+      !institutionId ||
+      !officialEmail ||
+      !contactPerson ||
+      !designation ||
+      !phone ||
+      !address ||
+      !city ||
+      !state ||
+      !pincode ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields'
+        message: "Please provide all required fields",
+      });
+    }
+
+    // Sanitize phone and pincode (remove spaces and special characters)
+    const sanitizedPhone = phone.replace(/\D/g, "");
+    const sanitizedPincode = pincode.replace(/\D/g, "");
+
+    // Validate phone and pincode length
+    if (sanitizedPhone.length !== 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number must be 10 digits",
+      });
+    }
+
+    if (sanitizedPincode.length !== 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Pincode must be 6 digits",
       });
     }
 
     // Check if institution already exists
     const existingInstitution = await Institution.findOne({
-      $or: [
-        { institutionId },
-        { registrationNumber },
-        { officialEmail }
-      ]
+      $or: [{ institutionId }, { registrationNumber }, { officialEmail }],
     });
 
     if (existingInstitution) {
       return res.status(400).json({
         success: false,
-        message: 'Institution already registered with this ID, registration number or email'
+        message:
+          "Institution already registered with this ID, registration number or email",
       });
     }
 
@@ -68,15 +95,15 @@ exports.registerInstitution = async (req, res) => {
       contactPerson: {
         name: contactPerson,
         designation,
-        phone
+        phone: sanitizedPhone,
       },
       address: {
         street: address,
         city,
         state,
-        pincode
+        pincode: sanitizedPincode,
       },
-      password
+      password,
     });
 
     // Generate token
@@ -84,7 +111,8 @@ exports.registerInstitution = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Institution registered successfully. Awaiting admin verification.',
+      message:
+        "Institution registered successfully. Awaiting admin verification.",
       token,
       institution: {
         id: institution._id,
@@ -92,14 +120,14 @@ exports.registerInstitution = async (req, res) => {
         institutionType: institution.institutionType,
         institutionId: institution.institutionId,
         role: institution.role,
-        isVerified: institution.isVerified
-      }
+        isVerified: institution.isVerified,
+      },
     });
   } catch (error) {
-    console.error('Institution registration error:', error);
+    console.error("Institution registration error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -117,22 +145,19 @@ exports.loginInstitution = async (req, res) => {
     if ((!institutionId && !email) || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide institution ID/email and password'
+        message: "Please provide institution ID/email and password",
       });
     }
 
     // Find institution
     const institution = await Institution.findOne({
-      $or: [
-        { institutionId },
-        { officialEmail: email }
-      ]
-    }).select('+password');
+      $or: [{ institutionId }, { officialEmail: email }],
+    }).select("+password");
 
     if (!institution) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
@@ -140,7 +165,7 @@ exports.loginInstitution = async (req, res) => {
     if (!institution.isActive) {
       return res.status(403).json({
         success: false,
-        message: 'Institution account is deactivated. Please contact admin.'
+        message: "Institution account is deactivated. Please contact admin.",
       });
     }
 
@@ -149,7 +174,7 @@ exports.loginInstitution = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
@@ -158,7 +183,7 @@ exports.loginInstitution = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       token,
       institution: {
         id: institution._id,
@@ -170,14 +195,14 @@ exports.loginInstitution = async (req, res) => {
         isVerified: institution.isVerified,
         permissions: institution.permissions,
         contactPerson: institution.contactPerson,
-        address: institution.address
-      }
+        address: institution.address,
+      },
     });
   } catch (error) {
-    console.error('Institution login error:', error);
+    console.error("Institution login error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -189,24 +214,25 @@ exports.loginInstitution = async (req, res) => {
  */
 exports.getInstitutionProfile = async (req, res) => {
   try {
-    const institution = await Institution.findById(req.institution.id);
+    // req.institution is already set by the middleware, so we can use it directly
+    const institution = req.institution;
 
     if (!institution) {
       return res.status(404).json({
         success: false,
-        message: 'Institution not found'
+        message: "Institution not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: institution
+      data: institution,
     });
   } catch (error) {
-    console.error('Get institution profile error:', error);
+    console.error("Get institution profile error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -226,25 +252,47 @@ exports.updateInstitutionProfile = async (req, res) => {
       city,
       state,
       pincode,
-      jurisdiction
+      jurisdiction,
     } = req.body;
+
+    console.log("Received update data:", req.body);
 
     const updateData = {};
 
-    if (contactPerson || designation || phone) {
+    // Always update contactPerson if any field is provided
+    if (
+      contactPerson !== undefined ||
+      designation !== undefined ||
+      phone !== undefined
+    ) {
       updateData.contactPerson = {
-        name: contactPerson || req.institution.contactPerson.name,
-        designation: designation || req.institution.contactPerson.designation,
-        phone: phone || req.institution.contactPerson.phone
+        name:
+          contactPerson !== undefined
+            ? contactPerson
+            : req.institution.contactPerson?.name,
+        designation:
+          designation !== undefined
+            ? designation
+            : req.institution.contactPerson?.designation,
+        phone:
+          phone !== undefined ? phone : req.institution.contactPerson?.phone,
       };
     }
 
-    if (address || city || state || pincode) {
+    // Always update address if any field is provided
+    if (
+      address !== undefined ||
+      city !== undefined ||
+      state !== undefined ||
+      pincode !== undefined
+    ) {
       updateData.address = {
-        street: address || req.institution.address.street,
-        city: city || req.institution.address.city,
-        state: state || req.institution.address.state,
-        pincode: pincode || req.institution.address.pincode
+        street:
+          address !== undefined ? address : req.institution.address?.street,
+        city: city !== undefined ? city : req.institution.address?.city,
+        state: state !== undefined ? state : req.institution.address?.state,
+        pincode:
+          pincode !== undefined ? pincode : req.institution.address?.pincode,
       };
     }
 
@@ -252,22 +300,87 @@ exports.updateInstitutionProfile = async (req, res) => {
       updateData.jurisdiction = jurisdiction;
     }
 
+    console.log("Update data to be saved:", updateData);
+
     const institution = await Institution.findByIdAndUpdate(
-      req.institution.id,
+      req.institution._id,
       updateData,
       { new: true, runValidators: true }
     );
 
+    console.log("Updated institution:", institution);
+
     res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
-      data: institution
+      message: "Profile updated successfully",
+      data: institution,
     });
   } catch (error) {
-    console.error('Update institution profile error:', error);
+    console.error("Update institution profile error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Change institution password
+ * @route   PUT /api/institutions/change-password
+ * @access  Private
+ */
+exports.changeInstitutionPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide both current and new password",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 8 characters",
+      });
+    }
+
+    // Get institution with password
+    const institution = await Institution.findById(req.institution.id).select(
+      "+password"
+    );
+
+    if (!institution) {
+      return res.status(404).json({
+        success: false,
+        message: "Institution not found",
+      });
+    }
+
+    // Verify current password
+    const isMatch = await institution.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Update password
+    institution.password = newPassword;
+    await institution.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Change institution password error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -282,23 +395,23 @@ exports.getAllInstitutions = async (req, res) => {
     const { type, verified, active, page = 1, limit = 20 } = req.query;
 
     const query = {};
-    
+
     if (type) {
       query.institutionType = type;
     }
-    
+
     if (verified !== undefined) {
-      query.isVerified = verified === 'true';
+      query.isVerified = verified === "true";
     }
-    
+
     if (active !== undefined) {
-      query.isActive = active === 'true';
+      query.isActive = active === "true";
     }
 
     const skip = (page - 1) * limit;
 
     const institutions = await Institution.find(query)
-      .select('-password')
+      .select("-password")
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(skip);
@@ -311,13 +424,13 @@ exports.getAllInstitutions = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / limit),
-      data: institutions
+      data: institutions,
     });
   } catch (error) {
-    console.error('Get institutions error:', error);
+    console.error("Get institutions error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -329,24 +442,26 @@ exports.getAllInstitutions = async (req, res) => {
  */
 exports.getInstitution = async (req, res) => {
   try {
-    const institution = await Institution.findById(req.params.id).select('-password');
+    const institution = await Institution.findById(req.params.id).select(
+      "-password"
+    );
 
     if (!institution) {
       return res.status(404).json({
         success: false,
-        message: 'Institution not found'
+        message: "Institution not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: institution
+      data: institution,
     });
   } catch (error) {
-    console.error('Get institution error:', error);
+    console.error("Get institution error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -363,7 +478,7 @@ exports.verifyInstitution = async (req, res) => {
       {
         isVerified: true,
         verifiedBy: req.user.id,
-        verifiedAt: new Date()
+        verifiedAt: new Date(),
       },
       { new: true }
     );
@@ -371,20 +486,20 @@ exports.verifyInstitution = async (req, res) => {
     if (!institution) {
       return res.status(404).json({
         success: false,
-        message: 'Institution not found'
+        message: "Institution not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Institution verified successfully',
-      data: institution
+      message: "Institution verified successfully",
+      data: institution,
     });
   } catch (error) {
-    console.error('Verify institution error:', error);
+    console.error("Verify institution error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -407,20 +522,22 @@ exports.updateInstitutionStatus = async (req, res) => {
     if (!institution) {
       return res.status(404).json({
         success: false,
-        message: 'Institution not found'
+        message: "Institution not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: `Institution ${isActive ? 'activated' : 'deactivated'} successfully`,
-      data: institution
+      message: `Institution ${
+        isActive ? "activated" : "deactivated"
+      } successfully`,
+      data: institution,
     });
   } catch (error) {
-    console.error('Update institution status error:', error);
+    console.error("Update institution status error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -437,7 +554,7 @@ exports.getInstitutionStatistics = async (req, res) => {
     if (!institution) {
       return res.status(404).json({
         success: false,
-        message: 'Institution not found'
+        message: "Institution not found",
       });
     }
 
@@ -445,13 +562,13 @@ exports.getInstitutionStatistics = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: statistics
+      data: statistics,
     });
   } catch (error) {
-    console.error('Get institution statistics error:', error);
+    console.error("Get institution statistics error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };

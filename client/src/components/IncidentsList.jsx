@@ -13,7 +13,10 @@ const IncidentsList = ({ incidents, onIncidentClick, onUpvote, onDownvote, selec
       crime: '/assets/images/handcuff.png',
       missing: '/assets/images/question.png',
       'dog-attack': '/assets/images/pets.png',
+      dog: '/assets/images/pets.png',
       natural: '/assets/images/flood.png',
+      natural_disaster: '/assets/images/flood.png',
+      hazard: '/assets/images/siren.png',
     };
     return icons[type] || '/assets/images/location.png';
   };
@@ -23,7 +26,10 @@ const IncidentsList = ({ incidents, onIncidentClick, onUpvote, onDownvote, selec
       crime: 'Crime',
       missing: 'Missing Person',
       'dog-attack': 'Dog Attack',
-      natural: 'Natural Danger',
+      dog: 'Dog Attack',
+      natural: 'Natural Disaster',
+      natural_disaster: 'Natural Disaster',
+      hazard: 'Hazard',
     };
     return labels[type] || type;
   };
@@ -76,6 +82,25 @@ const IncidentsList = ({ incidents, onIncidentClick, onUpvote, onDownvote, selec
 
               {/* Description */}
               <p className="text-sm text-[#2F575D] mb-3 line-clamp-2">{incident.description}</p>
+
+              {/* Proof Image */}
+              {incident.proof && (
+                <div className="mb-3 rounded-lg overflow-hidden">
+                  <img
+                    src={
+                      incident.proof.startsWith('http') 
+                        ? incident.proof 
+                        : `http://localhost:8080${incident.proof.startsWith('/') ? '' : '/'}${incident.proof}`
+                    }
+                    alt="Evidence"
+                    className="w-full h-32 object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      console.error('Failed to load image:', incident.proof);
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Location */}
               <div className="flex items-center gap-2 text-xs text-[#658B6F] mb-3">

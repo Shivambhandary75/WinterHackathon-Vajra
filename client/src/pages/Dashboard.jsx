@@ -25,6 +25,13 @@ const Dashboard = () => {
   useEffect(() => {
     if (userData) {
       fetchReports();
+      
+      // Auto-refresh reports every 30 seconds for real-time updates
+      const refreshInterval = setInterval(() => {
+        fetchReports();
+      }, 30000); // 30 seconds
+
+      return () => clearInterval(refreshInterval); // Cleanup on unmount
     }
   }, [userData]);
 
@@ -54,12 +61,10 @@ const Dashboard = () => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      // Fetch reports - backend will filter based on authenticated user's location
+      // Fetch ALL reports for universal map view
       const response = await axiosInstance.get("/reports", {
         params: {
-          userCity: userData?.city,
-          userState: userData?.state,
-          limit: 100, // Get more reports to display
+          limit: 500, // Increased limit for nationwide view
         },
       });
       const data = Array.isArray(response.data)
@@ -96,8 +101,8 @@ const Dashboard = () => {
           address: displayAddress,
           status: report.status?.toLowerCase() || "pending",
           priority: report.priority?.toLowerCase() || "medium",
-          upvotes: report.upvotes || 0,
-          downvotes: report.downvotes || 0,
+          upvotes: report.upVotes || report.upvotes || 0,
+          downvotes: report.downVotes || report.downvotes || 0,
           reporter: report.reportedBy?.name || "Anonymous User",
           createdAt: report.createdAt,
           date: report.createdAt
@@ -124,19 +129,24 @@ const Dashboard = () => {
     try {
       console.log("New report data received:", newReport);
 
-      let latitude = newReport.location?.lat || 0;
-      let longitude = newReport.location?.lng || 0;
+      let latitude = newReport.location?.lat;
+      let longitude = newReport.location?.lng;
 
       console.log("Initial coordinates:", { latitude, longitude });
 
-      // Only geocode if BOTH coordinates are 0 and address exists
-      if (latitude === 0 && longitude === 0 && newReport.address) {
+      // If no coordinates provided, try to get from address
+      if (!latitude || !longitude || latitude === 0 || longitude === 0) {
+        if (!newReport.address) {
+          alert('Please provide a location by using "Use Current Location" or entering an address.');
+          return;
+        }
+        
         console.log("Attempting to geocode address:", newReport.address);
         try {
           const geocodeResponse = await fetch(
             `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
               newReport.address
-            )}&key=AIzaSyD_baF0etMza8OwVOQlTfHL1bTpbLGTi_Y`
+            )}&key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}`
           );
           const geocodeData = await geocodeResponse.json();
 
@@ -159,10 +169,10 @@ const Dashboard = () => {
         }
       }
 
-      // Validate coordinates
-      if (latitude === 0 && longitude === 0) {
+      // Final validation - ensure we have valid coordinates
+      if (!latitude || !longitude || latitude === 0 || longitude === 0) {
         alert(
-          'Please provide a valid location either by using "Use Current Location" or entering an address.'
+          'Invalid location. Please use "Use Current Location" or enter a valid address.'
         );
         return;
       }
@@ -181,19 +191,27 @@ const Dashboard = () => {
       const backendCategory =
         categoryMap[newReport.type?.toLowerCase()] || "CRIME";
 
-      const reportData = {
-        title: newReport.title,
-        category: backendCategory,
-        description: newReport.description,
-        priority: (newReport.priority || "MEDIUM").toUpperCase(),
-        latitude: latitude,
-        longitude: longitude,
-        address: newReport.address || "Unknown Location",
-        images: newReport.proof ? [newReport.proof] : [],
-      };
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('title', newReport.title);
+      formData.append('category', backendCategory);
+      formData.append('description', newReport.description);
+      formData.append('priority', (newReport.priority || "MEDIUM").toUpperCase());
+      formData.append('latitude', latitude);
+      formData.append('longitude', longitude);
+      formData.append('address', newReport.address || "Unknown Location");
+      
+      // Add file if provided
+      if (newReport.proof instanceof File) {
+        formData.append('files', newReport.proof);
+      }
 
-      console.log("Submitting report:", reportData);
-      const response = await axiosInstance.post("/reports", reportData);
+      console.log("Submitting report with file:", newReport.proof?.name || 'No file');
+      const response = await axiosInstance.post("/reports/with-files", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       console.log("Report created:", response.data);
 
       setShowReportModal(false);
@@ -223,9 +241,19 @@ const Dashboard = () => {
                 userLongitude: position.coords.longitude,
               });
 
-              // Update local state with response data
-              if (response.data.success) {
-                fetchReports(); // Refresh to get updated vote counts
+              // Update local state immediately with response data
+              if (response.data.success && response.data.report) {
+                setIncidents(prevIncidents => 
+                  prevIncidents.map(inc => 
+                    inc._id === id 
+                      ? { 
+                          ...inc, 
+                          upvotes: response.data.report.upVotes || 0,
+                          downvotes: response.data.report.downVotes || 0
+                        }
+                      : inc
+                  )
+                );
               }
             } catch (err) {
               console.error("Error upvoting:", err);
@@ -270,9 +298,19 @@ const Dashboard = () => {
                 userLongitude: position.coords.longitude,
               });
 
-              // Update local state with response data
-              if (response.data.success) {
-                fetchReports(); // Refresh to get updated vote counts
+              // Update local state immediately with response data
+              if (response.data.success && response.data.report) {
+                setIncidents(prevIncidents => 
+                  prevIncidents.map(inc => 
+                    inc._id === id 
+                      ? { 
+                          ...inc, 
+                          upvotes: response.data.report.upVotes || 0,
+                          downvotes: response.data.report.downVotes || 0
+                        }
+                      : inc
+                  )
+                );
               }
             } catch (err) {
               console.error("Error downvoting:", err);
@@ -316,13 +354,15 @@ const Dashboard = () => {
             {/* User Welcome Section */}
             {userData && (
               <div className="mb-6 p-4 bg-gradient-to-r from-[#658B6F] to-[#6D9197] rounded-lg text-white">
-                <h2 className="text-lg font-semibold mb-1">Welcome back!</h2>
-                <p className="text-sm opacity-90">{userData.name}</p>
+                <p className="text-sm font-semibold opacity-90">{userData.name}</p>
                 <p className="text-xs opacity-75">{userData.email}</p>
-                {userData.city && userData.state && (
-                  <div className="mt-2 pt-2 border-t border-white border-opacity-20">
+                {(userData.city || userData.state) && (
+                  <div className="mt-2 pt-2 border-t border-white border-opacity-20 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
                     <p className="text-xs opacity-90">
-                      📍 Showing reports from: {userData.city}, {userData.state}
+                      {[userData.city, userData.state].filter(Boolean).join(', ')}
                     </p>
                   </div>
                 )}
@@ -369,12 +409,12 @@ const Dashboard = () => {
                   icon: "/assets/images/question.png",
                 },
                 {
-                  value: "dog-attack",
+                  value: "dog",
                   label: "Dog Attack",
                   icon: "/assets/images/pets.png",
                 },
                 {
-                  value: "NATURAL_DISASTER",
+                  value: "natural_disaster",
                   label: "Natural",
                   icon: "/assets/images/flood.png",
                 },
@@ -402,12 +442,12 @@ const Dashboard = () => {
                 </div>
                 <div className="text-sm text-[#2F575D]">Total Reports</div>
               </div>
-              <div className="bg-[#CEE1DD] p-4 rounded-lg">
+              {/* <div className="bg-[#CEE1DD] p-4 rounded-lg">
                 <div className="text-2xl font-bold text-[#28363D]">
                   {incidents.filter((i) => i.status === "verified").length}
                 </div>
-                <div className="text-sm text-[#2F575D]">Verified</div>
-              </div>
+                <div className="text-sm text-[#2F575D]"></div>
+              </div> */}
             </div>
 
             {/* Loading State */}

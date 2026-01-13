@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div>
-            <h4 className="text-lg font-bold mb-4">SafetyNet</h4>
+            <h4 className="text-lg font-bold mb-4">SurakshaMap</h4>
             <p className="text-[#CEE1DD]">
               Building safer communities through transparency and collaboration.
             </p>
@@ -37,7 +37,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="border-t border-[#2F575D] pt-8 text-center text-[#CEE1DD]">
-          <p>&copy; 2026 SafetyNet. All rights reserved.</p>
+          <p>&copy; 2026 SurakshaMap. All rights reserved.</p>
         </div>
       </div>
     </footer>

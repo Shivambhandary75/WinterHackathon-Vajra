@@ -1,5 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import axiosInstance from '../utils/axiosInstance';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -10,6 +11,28 @@ const Navbar = () => {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
 
+  // Fetch institution data from backend if not in localStorage
+  const fetchInstitutionData = async () => {
+    try {
+      const response = await axiosInstance.get('/institutions/me');
+      if (response.data.success) {
+        const institution = response.data.data;
+        const name = institution.institutionName || "Institution";
+        const email = institution.officialEmail || "";
+        
+        // Save to localStorage
+        localStorage.setItem("institutionName", name);
+        localStorage.setItem("institutionEmail", email);
+        
+        // Update state
+        setUserName(name);
+        setUserEmail(email);
+      }
+    } catch (error) {
+      console.error('Error fetching institution data:', error);
+    }
+  };
+
   // Check login status and user data
   useEffect(() => {
     const type = localStorage.getItem("userType");
@@ -19,8 +42,16 @@ const Navbar = () => {
 
       // Get user/institution name and email from localStorage
       if (type === "institution") {
-        setUserName(localStorage.getItem("institutionName") || "Institution");
-        setUserEmail(localStorage.getItem("institutionEmail") || "");
+        const storedName = localStorage.getItem("institutionName");
+        const storedEmail = localStorage.getItem("institutionEmail");
+        
+        if (!storedName || storedName === "undefined" || !storedEmail || storedEmail === "undefined") {
+          // Fetch from backend if not in localStorage or if undefined
+          fetchInstitutionData();
+        } else {
+          setUserName(storedName);
+          setUserEmail(storedEmail);
+        }
       } else {
         setUserName(localStorage.getItem("userName") || "User");
         setUserEmail(localStorage.getItem("userEmail") || "");
@@ -56,8 +87,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-[#658B6F] rounded-lg"></div>
-            <span className="text-white text-xl font-bold">SafetyNet</span>
+            {/* <div className="w-8 h-8 bg-[#658B6F] rounded-lg"></div> */}
+            <span className="text-white text-xl font-bold">SurakshaMap</span>
           </Link>
 
           <div className="hidden md:flex items-center space-x-8">

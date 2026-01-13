@@ -275,10 +275,10 @@ const Landing = () => {
       >
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-[#28363D] mb-8">
-            About SafetyNet
+            About SurakshaMap
           </h2>
           <p className="text-lg text-[#6D9197] mb-8 leading-relaxed">
-            SafetyNet transforms scattered safety information into a trusted,
+            SurakshaMap transforms scattered safety information into a trusted,
             transparent, and location-aware public safety network. By connecting
             communities, authorities, and tourists on a single platform, we
             improve awareness, accountability, and institutional response to

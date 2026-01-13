@@ -1,9 +1,9 @@
-const Report = require('../models/Report');
-const StatusLog = require('../models/StatusLog');
-const { detectAndCreateAlert } = require('../utils/alertDetection');
-const axios = require('axios');
+const Report = require("../models/Report");
+const StatusLog = require("../models/StatusLog");
+const { detectAndCreateAlert } = require("../utils/alertDetection");
+const axios = require("axios");
 
-const GOOGLE_MAPS_API_KEY = 'AIzaSyD_baF0etMza8OwVOQlTfHL1bTpbLGTi_Y';
+const GOOGLE_MAPS_API_KEY = "AIzaSyD_baF0etMza8OwVOQlTfHL1bTpbLGTi_Y";
 
 // Helper function for reverse geocoding
 const reverseGeocode = async (latitude, longitude) => {
@@ -12,12 +12,12 @@ const reverseGeocode = async (latitude, longitude) => {
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
     );
 
-    if (response.data.status === 'OK' && response.data.results.length > 0) {
+    if (response.data.status === "OK" && response.data.results.length > 0) {
       return response.data.results[0].formatted_address;
     }
     return null;
   } catch (error) {
-    console.error('Reverse geocoding error:', error.message);
+    console.error("Reverse geocoding error:", error.message);
     return null;
   }
 };
@@ -27,22 +27,37 @@ const reverseGeocode = async (latitude, longitude) => {
 // @access  Private
 exports.createReport = async (req, res) => {
   try {
-    const { title, category, description, images, latitude, longitude, address, priority } = req.body;
+    const {
+      title,
+      category,
+      description,
+      images,
+      latitude,
+      longitude,
+      address,
+      priority,
+    } = req.body;
 
     // Validation
     if (!title || !category || !description || !address) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide title, category, description, and address'
+        message: "Please provide title, category, description, and address",
       });
     }
 
     // Validate category
-    const validCategories = ['CRIME', 'MISSING', 'DOG', 'HAZARD', 'NATURAL_DISASTER'];
+    const validCategories = [
+      "CRIME",
+      "MISSING",
+      "DOG",
+      "HAZARD",
+      "NATURAL_DISASTER",
+    ];
     if (!validCategories.includes(category)) {
       return res.status(400).json({
         success: false,
-        message: `Category must be one of: ${validCategories.join(', ')}`
+        message: `Category must be one of: ${validCategories.join(", ")}`,
       });
     }
 
@@ -50,7 +65,7 @@ exports.createReport = async (req, res) => {
     if (latitude === undefined || longitude === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide latitude and longitude'
+        message: "Please provide latitude and longitude",
       });
     }
 
@@ -58,24 +73,24 @@ exports.createReport = async (req, res) => {
     if (latitude < -90 || latitude > 90) {
       return res.status(400).json({
         success: false,
-        message: 'Latitude must be between -90 and 90'
+        message: "Latitude must be between -90 and 90",
       });
     }
 
     if (longitude < -180 || longitude > 180) {
       return res.status(400).json({
         success: false,
-        message: 'Longitude must be between -180 and 180'
+        message: "Longitude must be between -180 and 180",
       });
     }
 
     // Validate priority if provided
     if (priority) {
-      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+      const validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
       if (!validPriorities.includes(priority)) {
         return res.status(400).json({
           success: false,
-          message: `Priority must be one of: ${validPriorities.join(', ')}`
+          message: `Priority must be one of: ${validPriorities.join(", ")}`,
         });
       }
     }
@@ -84,20 +99,20 @@ exports.createReport = async (req, res) => {
     if (description.length < 10) {
       return res.status(400).json({
         success: false,
-        message: 'Description must be at least 10 characters long'
+        message: "Description must be at least 10 characters long",
       });
     }
 
     if (description.length > 5000) {
       return res.status(400).json({
         success: false,
-        message: 'Description cannot exceed 5000 characters'
+        message: "Description cannot exceed 5000 characters",
       });
     }
 
     // Get address from coordinates if not provided
     let finalAddress = address;
-    if (!address || address.includes('Lat:') || address.includes('lat:')) {
+    if (!address || address.includes("Lat:") || address.includes("lat:")) {
       const geocodedAddress = await reverseGeocode(latitude, longitude);
       if (geocodedAddress) {
         finalAddress = geocodedAddress;
@@ -111,41 +126,41 @@ exports.createReport = async (req, res) => {
       title,
       category,
       description,
-      priority: priority || 'MEDIUM',
+      priority: priority || "MEDIUM",
       reportedBy: req.user.id,
       location: {
-        type: 'Point',
+        type: "Point",
         coordinates: [longitude, latitude], // GeoJSON format: [longitude, latitude]
-        address: finalAddress
-      }
+        address: finalAddress,
+      },
     };
 
     // Add images if provided
     if (images && Array.isArray(images)) {
-      reportData.images = images.map(img => ({
-        url: img
+      reportData.images = images.map((img) => ({
+        url: img,
       }));
     }
 
     const report = await Report.create(reportData);
 
     // Populate user information
-    await report.populate('reportedBy', 'name email phone city state');
+    await report.populate("reportedBy", "name email phone city state");
 
     // Trigger alert detection in background (don't wait for completion)
-    detectAndCreateAlert(report).catch(err => {
-      console.error('Alert detection error:', err);
+    detectAndCreateAlert(report).catch((err) => {
+      console.error("Alert detection error:", err);
     });
 
     res.status(201).json({
       success: true,
-      message: 'Report created successfully',
-      report
+      message: "Report created successfully",
+      report,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -155,27 +170,47 @@ exports.createReport = async (req, res) => {
 // @access  Public
 exports.getAllReports = async (req, res) => {
   try {
-    const { category, status, priority, page = 1, limit = 10, userCity, userState } = req.query;
+    const {
+      category,
+      status,
+      priority,
+      page = 1,
+      limit = 10,
+      userCity,
+      userState,
+    } = req.query;
 
     // Build filter object
     const filter = {};
 
     if (category) {
-      const validCategories = ['CRIME', 'MISSING', 'DOG', 'HAZARD', 'NATURAL_DISASTER'];
+      const validCategories = [
+        "CRIME",
+        "MISSING",
+        "DOG",
+        "HAZARD",
+        "NATURAL_DISASTER",
+      ];
       if (validCategories.includes(category.toUpperCase())) {
         filter.category = category.toUpperCase();
       }
     }
 
     if (status) {
-      const validStatuses = ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED'];
+      const validStatuses = [
+        "PENDING",
+        "IN_PROGRESS",
+        "UNDER_REVIEW",
+        "RESOLVED",
+        "CLOSED",
+      ];
       if (validStatuses.includes(status.toUpperCase())) {
         filter.status = status.toUpperCase();
       }
     }
 
     if (priority) {
-      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+      const validPriorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
       if (validPriorities.includes(priority.toUpperCase())) {
         filter.priority = priority.toUpperCase();
       }
@@ -185,7 +220,7 @@ exports.getAllReports = async (req, res) => {
 
     // Build query with population
     let query = Report.find(filter)
-      .populate('reportedBy', 'name email phone city state')
+      .populate("reportedBy", "name email phone city state")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -195,37 +230,42 @@ exports.getAllReports = async (req, res) => {
 
     // Filter by user location if provided (city and/or state)
     if (userCity || userState) {
-      reports = reports.filter(report => {
+      reports = reports.filter((report) => {
         if (!report.reportedBy) return false;
-        
+
         let matchesCity = true;
         let matchesState = true;
-        
+
         if (userCity) {
-          matchesCity = report.reportedBy.city?.toLowerCase() === userCity.toLowerCase();
+          matchesCity =
+            report.reportedBy.city?.toLowerCase() === userCity.toLowerCase();
         }
-        
+
         if (userState) {
-          matchesState = report.reportedBy.state?.toLowerCase() === userState.toLowerCase();
+          matchesState =
+            report.reportedBy.state?.toLowerCase() === userState.toLowerCase();
         }
-        
+
         return matchesCity && matchesState;
       });
     }
 
-    const total = userCity || userState ? reports.length : await Report.countDocuments(filter);
+    const total =
+      userCity || userState
+        ? reports.length
+        : await Report.countDocuments(filter);
 
     res.status(200).json({
       success: true,
       total,
       pages: Math.ceil(total / limit),
       currentPage: page,
-      reports
+      reports,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -239,23 +279,23 @@ exports.getReport = async (req, res) => {
       req.params.id,
       { $inc: { views: 1 } },
       { new: true }
-    ).populate('reportedBy', 'name email phone city state');
+    ).populate("reportedBy", "name email phone city state");
 
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      report
+      report,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -272,17 +312,20 @@ exports.updateReportStatus = async (req, res) => {
     if (!newStatus) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide the new status'
+        message: "Please provide the new status",
       });
     }
 
     // Fetch the current report
-    const report = await Report.findById(reportId).populate('reportedBy', 'name email phone city state');
-    
+    const report = await Report.findById(reportId).populate(
+      "reportedBy",
+      "name email phone city state"
+    );
+
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
@@ -294,7 +337,7 @@ exports.updateReportStatus = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Cannot transition from status: ${currentStatus}`,
-        currentStatus
+        currentStatus,
       });
     }
 
@@ -304,7 +347,7 @@ exports.updateReportStatus = async (req, res) => {
         message: `Invalid status transition. Cannot go from ${currentStatus} to ${newStatus}`,
         currentStatus,
         requestedStatus: newStatus,
-        allowedTransitions: validTransitions[currentStatus]
+        allowedTransitions: validTransitions[currentStatus],
       });
     }
 
@@ -312,29 +355,29 @@ exports.updateReportStatus = async (req, res) => {
     if (currentStatus === newStatus) {
       return res.status(400).json({
         success: false,
-        message: `Report is already in ${currentStatus} status`
+        message: `Report is already in ${currentStatus} status`,
       });
     }
 
     // Prepare update data
     const updateData = {
       status: newStatus,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     // Add resolution details if transitioning to RESOLVED
-    if (newStatus === 'RESOLVED') {
+    if (newStatus === "RESOLVED") {
       updateData.resolvedAt = new Date();
       updateData.resolvedBy = req.user.id;
     }
 
     // Update the report
-    const updatedReport = await Report.findByIdAndUpdate(
-      reportId,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('reportedBy', 'name email phone city state')
-     .populate('resolvedBy', 'name email role');
+    const updatedReport = await Report.findByIdAndUpdate(reportId, updateData, {
+      new: true,
+      runValidators: true,
+    })
+      .populate("reportedBy", "name email phone city state")
+      .populate("resolvedBy", "name email role");
 
     // Log the status change
     const statusLog = await StatusLog.create({
@@ -346,11 +389,11 @@ exports.updateReportStatus = async (req, res) => {
       reason: reason || null,
       notes: notes || null,
       ipAddress: req.ip || req.connection.remoteAddress,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     // Populate status log user details
-    await statusLog.populate('changedBy', 'name email role');
+    await statusLog.populate("changedBy", "name email role");
 
     res.status(200).json({
       success: true,
@@ -365,17 +408,16 @@ exports.updateReportStatus = async (req, res) => {
           changedByRole: statusLog.changedByRole,
           reason: statusLog.reason,
           notes: statusLog.notes,
-          timestamp: statusLog.timestamp
-        }
-      }
+          timestamp: statusLog.timestamp,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Status update error:', error);
+    console.error("Status update error:", error);
     res.status(500).json({
       success: false,
-      message: 'Error updating report status',
-      error: error.message
+      message: "Error updating report status",
+      error: error.message,
     });
   }
 };
@@ -392,7 +434,7 @@ exports.getStatusHistory = async (req, res) => {
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
@@ -406,16 +448,15 @@ exports.getStatusHistory = async (req, res) => {
       data: {
         reportId,
         currentStatus: report.status,
-        history: statusHistory
-      }
+        history: statusHistory,
+      },
     });
-
   } catch (error) {
-    console.error('Status history error:', error);
+    console.error("Status history error:", error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching status history',
-      error: error.message
+      message: "Error fetching status history",
+      error: error.message,
     });
   }
 };
@@ -429,10 +470,15 @@ exports.getNearbyReports = async (req, res) => {
     const { maxDistance = 5000 } = req.query; // Default 5km
 
     // Validate coordinates
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid coordinates'
+        message: "Invalid coordinates",
       });
     }
 
@@ -440,17 +486,17 @@ exports.getNearbyReports = async (req, res) => {
       parseFloat(longitude),
       parseFloat(latitude),
       parseInt(maxDistance)
-    ).populate('reportedBy', 'name email phone city state');
+    ).populate("reportedBy", "name email phone city state");
 
     res.status(200).json({
       success: true,
       count: reports.length,
-      reports
+      reports,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -460,13 +506,13 @@ exports.getNearbyReports = async (req, res) => {
 // @access  Private (Institution)
 exports.updateReportAssignment = async (req, res) => {
   try {
-    const { assignedTo } = req.body;
+    const { assignedOfficer } = req.body;
 
     // Check if user is an institution
-    if (req.user.type !== 'institution') {
+    if (req.user.type !== "institution") {
       return res.status(403).json({
         success: false,
-        message: 'Only institutions can assign reports'
+        message: "Only institutions can assign reports",
       });
     }
 
@@ -475,29 +521,31 @@ exports.updateReportAssignment = async (req, res) => {
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
     // Update assignment
-    report.assignedTo = assignedTo || null;
-    
-    // If assigning to someone, update status to IN_PROGRESS
-    if (assignedTo && report.status === 'PENDING') {
-      report.status = 'IN_PROGRESS';
+    report.assignedOfficer = assignedOfficer || null;
+
+    // Only change status to IN_PROGRESS if report is PENDING
+    if (assignedOfficer && report.status === "PENDING") {
+      report.status = "IN_PROGRESS";
     }
 
     await report.save();
 
     res.status(200).json({
       success: true,
-      message: assignedTo ? `Report assigned to ${assignedTo}` : 'Assignment removed',
-      report
+      message: assignedOfficer
+        ? `Report assigned to ${assignedOfficer}`
+        : "Assignment removed",
+      report,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -510,10 +558,10 @@ exports.updateInstitutionNotes = async (req, res) => {
     const { notes } = req.body;
 
     // Check if user is an institution
-    if (req.user.type !== 'institution') {
+    if (req.user.type !== "institution") {
       return res.status(403).json({
         success: false,
-        message: 'Only institutions can add notes'
+        message: "Only institutions can add notes",
       });
     }
 
@@ -522,7 +570,7 @@ exports.updateInstitutionNotes = async (req, res) => {
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
@@ -530,22 +578,22 @@ exports.updateInstitutionNotes = async (req, res) => {
     if (notes && notes.length > 2000) {
       return res.status(400).json({
         success: false,
-        message: 'Notes cannot exceed 2000 characters'
+        message: "Notes cannot exceed 2000 characters",
       });
     }
 
-    report.institutionNotes = notes || '';
+    report.institutionNotes = notes || "";
     await report.save();
 
     res.status(200).json({
       success: true,
-      message: 'Institution notes updated',
-      report
+      message: "Institution notes updated",
+      report,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -560,7 +608,7 @@ exports.deleteReport = async (req, res) => {
     if (!report) {
       return res.status(404).json({
         success: false,
-        message: 'Report not found'
+        message: "Report not found",
       });
     }
 
@@ -568,7 +616,7 @@ exports.deleteReport = async (req, res) => {
     if (report.reportedBy.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to delete this report'
+        message: "Not authorized to delete this report",
       });
     }
 
@@ -576,12 +624,12 @@ exports.deleteReport = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Report deleted successfully'
+      message: "Report deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
