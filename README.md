@@ -195,6 +195,6 @@ After setting up, you can register new users or institutions through the registr
 
 ## Team Members
 
-- [Shivam S](https://github.com/Shivambhandary75/)
-- [Prasad](https://github.com/prasadnaik12p)
-- [Sharan Lenwin Correa](https://github.com/Sharan-d-oss)
+- [Shivam S](https://github.com/Shivambhandary75/) -Fullstack
+- [Prasad](https://github.com/prasadnaik12p) - Fullstack
+- [Sharan Lenwin Correa](https://github.com/Sharan-d-oss) -Frontend
