@@ -1,13 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   APIProvider,
   Map,
   AdvancedMarker,
   Pin,
   InfoWindow,
+  useMap,
 } from "@vis.gl/react-google-maps";
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyD_baF0etMza8OwVOQlTfHL1bTpbLGTi_Y";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+// Component to handle map instance
+const MapController = ({ userLocation, onMapLoad }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (map) {
+      onMapLoad(map);
+    }
+  }, [map, onMapLoad]);
+  
+  return null;
+};
 
 const MapView = ({
   incidents,
@@ -19,6 +33,7 @@ const MapView = ({
   const [userLocation, setUserLocation] = useState(null);
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [isLocationLoading, setIsLocationLoading] = useState(true);
+  const [mapInstance, setMapInstance] = useState(null);
 
   // Debug: Log incidents data
   useEffect(() => {
@@ -29,14 +44,30 @@ const MapView = ({
     }
   }, [incidents]);
 
+  // Sync selected marker when incidents update (after voting)
+  useEffect(() => {
+    if (selectedMarker && incidents) {
+      const updatedIncident = incidents.find(
+        inc => inc._id === selectedMarker._id || inc.id === selectedMarker.id
+      );
+      if (updatedIncident) {
+        setSelectedMarker(updatedIncident);
+      }
+    }
+  }, [incidents]);
+
   // Get incident pin color based on status
   const getPinColor = (status) => {
     const colors = {
       pending: "#d0efff",
       "in-progress": "#2a9df4",
+      in_progress: "#2a9df4",
+      "under-review": "#2a9df4",
+      under_review: "#2a9df4",
       resolved: "#1167b1",
+      closed: "#1167b1",
     };
-    return colors[status] || "#28363D";
+    return colors[status] || "#d0efff"; // Default to pending color instead of black
   };
 
   // Get priority color
@@ -97,6 +128,14 @@ const MapView = ({
     }
   };
 
+  // Handle recenter to user location
+  const handleRecenterToUserLocation = () => {
+    if (userLocation && mapInstance) {
+      mapInstance.panTo(userLocation);
+      mapInstance.setZoom(15);
+    }
+  };
+
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden shadow-lg">
       {isLocationLoading ? (
@@ -116,6 +155,11 @@ const MapView = ({
             mapId="safety-map"
             style={{ width: "100%", height: "100%" }}
           >
+            {/* Map controller to get map instance */}
+            <MapController 
+              userLocation={userLocation}
+              onMapLoad={setMapInstance}
+            />
             {/* User location marker */}
             {userLocation && (
               <AdvancedMarker position={userLocation}>
@@ -137,10 +181,19 @@ const MapView = ({
             {incidents &&
               incidents
                 .filter(
-                  (incident) =>
-                    incident.coordinates &&
-                    incident.coordinates.lat &&
-                    incident.coordinates.lng
+                  (incident) => {
+                    const hasValidCoords = incident.coordinates &&
+                      typeof incident.coordinates.lat === 'number' &&
+                      typeof incident.coordinates.lng === 'number' &&
+                      !isNaN(incident.coordinates.lat) &&
+                      !isNaN(incident.coordinates.lng) &&
+                      !(incident.coordinates.lat === 0 && incident.coordinates.lng === 0);
+                    
+                    if (!hasValidCoords) {
+                      console.log("Filtered out incident (invalid/zero coords):", incident.title, incident.coordinates);
+                    }
+                    return hasValidCoords;
+                  }
                 )
                 .map((incident) => (
                   <AdvancedMarker
@@ -171,19 +224,19 @@ const MapView = ({
                         }}
                       >
                         {/* Inner icon/indicator */}
-                        <div className="text-white text-xl font-bold">
-                          {incident.type === "crime"
-                            ? "🚨"
-                            : incident.type === "missing"
-                            ? "👤"
-                            : incident.type === "dog"
-                            ? "🐕"
-                            : incident.type === "natural" ||
-                              incident.type === "natural_disaster"
-                            ? "🌊"
-                            : incident.type === "hazard"
-                            ? "⚠️"
-                            : "📍"}
+                        <div className="flex items-center justify-center">
+                          <img 
+                            src={
+                              incident.type === "crime" ? "/assets/images/handcuff.png" :
+                              incident.type === "missing" ? "/assets/images/question.png" :
+                              incident.type === "dog" || incident.type === "dog-attack" ? "/assets/images/pets.png" :
+                              incident.type === "natural" || incident.type === "natural_disaster" ? "/assets/images/flood.png" :
+                              incident.type === "hazard" ? "/assets/images/siren.png" :
+                              "/assets/images/location.png"
+                            }
+                            alt={incident.type}
+                            className="w-6 h-6"
+                          />
                         </div>
                       </div>
 
@@ -222,9 +275,17 @@ const MapView = ({
                     {selectedMarker.proof && (
                       <div className="mb-3 -mx-3 -mt-3">
                         <img
-                          src={selectedMarker.proof}
+                          src={
+                            selectedMarker.proof.startsWith('http') 
+                              ? selectedMarker.proof 
+                              : `http://localhost:8080${selectedMarker.proof.startsWith('/') ? '' : '/'}${selectedMarker.proof}`
+                          }
                           alt={selectedMarker.title}
                           className="w-full h-40 object-cover rounded-t-lg"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            console.error('Failed to load image:', selectedMarker.proof);
+                          }}
                         />
                       </div>
                     )}
@@ -240,9 +301,15 @@ const MapView = ({
                             ? "bg-yellow-100 text-yellow-800"
                             : selectedMarker.status === "in-progress" ||
                               selectedMarker.status === "in_progress"
-                            ? "bg-blue-100 text-blue-800"
+                            ? "text-white"
                             : "bg-green-100 text-green-800"
                         }`}
+                        style={
+                          selectedMarker.status === "in-progress" ||
+                          selectedMarker.status === "in_progress"
+                            ? { backgroundColor: "#2a9df4" }
+                            : {}
+                        }
                       >
                         {selectedMarker.status.replace("_", " ")}
                       </span>
@@ -312,36 +379,36 @@ const MapView = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpvote &&
+                          if (onUpvote) {
                             onUpvote(selectedMarker._id || selectedMarker.id);
+                          }
                         }}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 text-sm font-semibold transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 hover:shadow-md text-sm font-semibold transition-all active:scale-95"
+                        title="Upvote this report"
                       >
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z" />
-                        </svg>
-                        {selectedMarker.upvotes || 0}
+                        <img 
+                          src="/assets/images/upVote.png" 
+                          alt="Upvote" 
+                          className="w-5 h-5"
+                        />
+                        <span className="min-w-[20px] text-center">{selectedMarker.upvotes || 0}</span>
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDownvote &&
+                          if (onDownvote) {
                             onDownvote(selectedMarker._id || selectedMarker.id);
+                          }
                         }}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 text-sm font-semibold transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 hover:shadow-md text-sm font-semibold transition-all active:scale-95"
+                        title="Downvote this report"
                       >
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z" />
-                        </svg>
-                        {selectedMarker.downvotes || 0}
+                        <img 
+                          src="/assets/images/downVote.png" 
+                          alt="Downvote" 
+                          className="w-5 h-5"
+                        />
+                        <span className="min-w-[20px] text-center">{selectedMarker.downvotes || 0}</span>
                       </button>
                     </div>
                   </div>
@@ -402,13 +469,17 @@ const MapView = ({
             </div>
           </div>
 
-          {/* User Location Indicator */}
-          <div className="absolute top-4 left-4 bg-[#658B6F] text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-10">
+          {/* My Location Button */}
+          <button
+            onClick={handleRecenterToUserLocation}
+            className="absolute top-24 left-4 bg-[#658B6F] hover:bg-[#6D9197] text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-10 transition-colors cursor-pointer"
+            title="Go to my location"
+          >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
             </svg>
-            <span className="text-sm font-medium">Your Location</span>
-          </div>
+            <span className="text-sm font-medium">My Location</span>
+          </button>
         </APIProvider>
       )}
     </div>

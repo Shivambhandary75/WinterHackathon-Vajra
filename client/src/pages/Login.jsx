@@ -84,7 +84,7 @@ const Login = () => {
         <div className="text-center mb-10">
           <Link to="/" className="inline-flex items-center space-x-2 mb-6">
             <div className="w-12 h-12 bg-[#658B6F] rounded-lg"></div>
-            <span className="text-[#28363D] text-2xl font-bold">SafetyNet</span>
+            <span className="text-[#28363D] text-2xl font-bold">SurakshaMap</span>
           </Link>
           <h1 className="text-3xl font-bold text-[#28363D] mb-2">
             Welcome Back

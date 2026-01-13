@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const ReportIncident = ({ onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
@@ -12,6 +12,8 @@ const ReportIncident = ({ onClose, onSubmit }) => {
   });
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
   const [proofPreview, setProofPreview] = useState(null);
+  const addressInputRef = useRef(null);
+  const autocompleteRef = useRef(null);
 
   const incidentTypes = [
     { value: 'crime', label: 'Crime', icon: '/assets/images/handcuff.png', description: 'Theft, assault, vandalism' },
@@ -19,6 +21,45 @@ const ReportIncident = ({ onClose, onSubmit }) => {
     { value: 'dog-attack', label: 'Dog Attack', icon: '/assets/images/pets.png', description: 'Stray dog incidents' },
     { value: 'natural', label: 'Natural Danger', icon: '/assets/images/flood.png', description: 'Floods, landslides, hazards' },
   ];
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!addressInputRef.current || !window.google) return;
+
+    // Create autocomplete instance
+    autocompleteRef.current = new window.google.maps.places.Autocomplete(
+      addressInputRef.current,
+      {
+        types: ['geocode', 'establishment'],
+        componentRestrictions: { country: 'in' }, // Restrict to India
+      }
+    );
+
+    // Listen for place selection
+    autocompleteRef.current.addListener('place_changed', () => {
+      const place = autocompleteRef.current.getPlace();
+
+      if (place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        
+        setFormData(prev => ({
+          ...prev,
+          location: { lat, lng },
+          address: place.formatted_address || place.name,
+        }));
+        
+        setUseCurrentLocation(true);
+        console.log('Place selected:', { lat, lng, address: place.formatted_address });
+      }
+    });
+
+    return () => {
+      if (autocompleteRef.current) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+    };
+  }, []);
 
   const handleLocationClick = () => {
     if (navigator.geolocation) {
@@ -48,7 +89,7 @@ const ReportIncident = ({ onClose, onSubmit }) => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setFormData({ ...formData, proof: file.name });
+      setFormData({ ...formData, proof: file }); // Store the actual file object
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -210,14 +251,30 @@ const ReportIncident = ({ onClose, onSubmit }) => {
               
               <div className="text-center text-[#2F575D] text-sm">or</div>
               
-              <input
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Enter address manually or click map"
-                className="w-full px-4 py-3 rounded-lg border-2 border-[#C4CDC1] focus:border-[#658B6F] focus:outline-none transition-colors"
-                required
-              />
+              <div className="relative">
+                <input
+                  ref={addressInputRef}
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Search for a place or enter address..."
+                  className="w-full px-4 py-3 rounded-lg border-2 border-[#C4CDC1] focus:border-[#658B6F] focus:outline-none transition-colors"
+                  required
+                />
+                <div className="absolute right-3 top-3 text-[#99AEAD]">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                  </svg>
+                </div>
+              </div>
+              {useCurrentLocation && formData.location.lat !== 0 && (
+                <div className="flex items-center gap-2 text-xs text-green-600 mt-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                  <span>Location captured: {formData.location.lat.toFixed(4)}, {formData.location.lng.toFixed(4)}</span>
+                </div>
+              )}
             </div>
           </div>
 

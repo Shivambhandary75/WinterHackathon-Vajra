@@ -120,32 +120,46 @@ const InstitutionRegister = () => {
     return newErrors;
   };
 
-  const handleNext = () => {
-    let newErrors = {};
-    if (step === 1) {
-      newErrors = validateStep1();
-    } else if (step === 2) {
-      newErrors = validateStep2();
+  const handleNext = (e) => {
+    if (e) {
+      e.preventDefault();
     }
+    
+    try {
+      let newErrors = {};
+      if (step === 1) {
+        newErrors = validateStep1();
+      } else if (step === 2) {
+        newErrors = validateStep2();
+      }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
+      
+      // Clear any previous errors
+      setErrors({});
+      setStep(step + 1);
+    } catch (error) {
+      console.error("Error in handleNext:", error);
+      setErrors({ general: error.message || "An unexpected error occurred" });
     }
-    setStep(step + 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const newErrors = validateStep3();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
     try {
+      const newErrors = validateStep3();
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        return;
+      }
+
       setLoading(true);
+      setErrors({}); // Clear any previous errors
+      
       const response = await axiosInstance.post("/institutions/register", {
         institutionName: formData.institutionName,
         institutionType: formData.institutionType,
@@ -180,8 +194,7 @@ const InstitutionRegister = () => {
     } catch (error) {
       console.error("Registration error:", error);
       setErrors({
-        submit:
-          error.response?.data?.message ||
+        general: error.response?.data?.message || error.message ||
           "Registration failed. Please try again.",
       });
     } finally {
@@ -204,7 +217,7 @@ const InstitutionRegister = () => {
                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
               </svg>
             </div>
-            <span className="text-white text-2xl font-bold">SafetyNet</span>
+            <span className="text-white text-2xl font-bold">SurakshaMap</span>
           </Link>
           <h1 className="text-3xl font-bold text-white mb-2">
             Institution Registration
@@ -284,6 +297,13 @@ const InstitutionRegister = () => {
 
         {/* Registration Form */}
         <Card>
+          {/* General Error Display */}
+          {errors.general && (
+            <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded mb-6">
+              {errors.general}
+            </div>
+          )}
+          
           <form onSubmit={handleSubmit}>
             {/* Step 1: Institution Information */}
             {step === 1 && (
@@ -516,7 +536,7 @@ const InstitutionRegister = () => {
                   required
                 />
 
-                <div className="bg-[#CEE1DD] p-4 rounded-lg">
+                {/* <div className="bg-[#CEE1DD] p-4 rounded-lg">
                   <h4 className="font-semibold text-[#28363D] mb-2 flex items-center gap-2">
                     <svg
                       className="w-5 h-5 text-[#658B6F]"
@@ -539,7 +559,7 @@ const InstitutionRegister = () => {
                   <p className="text-sm text-[#2F575D] mt-2">
                     <strong>Processing time:</strong> 2-3 business days
                   </p>
-                </div>
+                </div> */}
 
                 <div>
                   <label className="flex items-start">
@@ -574,12 +594,6 @@ const InstitutionRegister = () => {
                     </p>
                   )}
                 </div>
-
-                {errors.submit && (
-                  <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded">
-                    {errors.submit}
-                  </div>
-                )}
 
                 <div className="flex space-x-4">
                   <Button

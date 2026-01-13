@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import axiosInstance from '../utils/axiosInstance';
 
 const EditProfile = () => {
   const navigate = useNavigate();
@@ -12,27 +13,56 @@ const EditProfile = () => {
     phone: '',
     state: '',
     city: '',
+    username: '',
+    bio: '',
+    website: '',
     currentPassword: '',
     newPassword: '',
     confirmNewPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
   const [changePassword, setChangePassword] = useState(false);
 
-  // Load user data on component mount
+  // Fetch user data from backend on component mount
   useEffect(() => {
-    // TODO: Fetch user data from API/localStorage
-    const userData = {
-      fullName: 'John Doe',
-      email: 'john@example.com',
-      phone: '1234567890',
-      state: 'Maharashtra',
-      city: 'Mumbai',
-    };
-    setFormData(prev => ({ ...prev, ...userData }));
+    fetchUserProfile();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      setIsFetching(true);
+      const response = await axiosInstance.get('/auth/me');
+      const user = response.data.user || response.data;
+      
+      setFormData({
+        fullName: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        state: user.state || '',
+        city: user.city || '',
+        username: user.username || '',
+        bio: user.bio || '',
+        website: user.website || '',
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: '',
+      });
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      if (error.response?.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else {
+        setErrors({ fetch: 'Failed to load profile data' });
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   const handleChange = (e) => {
     const value = e.target.value;
@@ -101,6 +131,7 @@ const EditProfile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSuccessMessage('');
+    setErrors({});
     
     const newErrors = validateForm();
     if (Object.keys(newErrors).length > 0) {
@@ -111,11 +142,26 @@ const EditProfile = () => {
     setIsLoading(true);
     
     try {
-      // TODO: API call to update profile
-      console.log('Profile update submitted:', formData);
+      // Update profile information
+      const profileData = {
+        name: formData.fullName,
+        phone: formData.phone,
+        city: formData.city,
+        state: formData.state,
+        username: formData.username,
+        bio: formData.bio,
+        website: formData.website,
+      };
+
+      await axiosInstance.put('/auth/profile', profileData);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // If changing password, make separate API call
+      if (changePassword) {
+        await axiosInstance.put('/auth/change-password', {
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword,
+        });
+      }
       
       setSuccessMessage('Profile updated successfully!');
       
@@ -129,8 +175,17 @@ const EditProfile = () => {
         }));
         setChangePassword(false);
       }
+
+      // Refresh profile data
+      setTimeout(() => {
+        fetchUserProfile();
+      }, 1000);
+      
     } catch (error) {
-      setErrors({ submit: 'Failed to update profile. Please try again.' });
+      console.error('Error updating profile:', error);
+      setErrors({ 
+        submit: error.response?.data?.message || 'Failed to update profile. Please try again.' 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -144,18 +199,30 @@ const EditProfile = () => {
           <p className="text-gray-600">Update your personal information</p>
         </div>
 
-        <Card className="p-8">
-          {successMessage && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
-              {successMessage}
-            </div>
-          )}
+        {isFetching ? (
+          <Card className="p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading profile...</p>
+          </Card>
+        ) : (
+          <Card className="p-8">
+            {successMessage && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
+                {successMessage}
+              </div>
+            )}
 
-          {errors.submit && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {errors.submit}
-            </div>
-          )}
+            {errors.submit && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                {errors.submit}
+              </div>
+            )}
+
+            {errors.fetch && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                {errors.fetch}
+              </div>
+            )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information */}
@@ -286,7 +353,7 @@ const EditProfile = () => {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/dashboard')}
                 className="flex-1"
               >
                 Cancel
@@ -294,6 +361,7 @@ const EditProfile = () => {
             </div>
           </form>
         </Card>
+        )}
       </div>
     </div>
   );

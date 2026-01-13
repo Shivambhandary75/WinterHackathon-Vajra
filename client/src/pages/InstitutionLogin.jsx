@@ -66,8 +66,8 @@ const InstitutionLogin = () => {
       localStorage.setItem("token", token);
       localStorage.setItem("userType", "institution");
       localStorage.setItem("institutionId", institution.institutionId);
-      localStorage.setItem("institutionEmail", institution.email);
-      localStorage.setItem("institutionName", institution.name);
+      localStorage.setItem("institutionEmail", institution.officialEmail);
+      localStorage.setItem("institutionName", institution.institutionName);
 
       // Redirect to originally requested page or institution dashboard
       navigate(from, { replace: true });
@@ -98,7 +98,7 @@ const InstitutionLogin = () => {
                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
               </svg>
             </div>
-            <span className="text-white text-2xl font-bold">SafetyNet</span>
+            <span className="text-white text-2xl font-bold">SurakshaMap</span>
           </Link>
           <h1 className="text-3xl font-bold text-white mb-2">
             Institution Portal

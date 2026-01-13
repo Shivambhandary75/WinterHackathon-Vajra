@@ -1,163 +1,173 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const reportSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, 'Please provide a report title'],
+      required: [true, "Please provide a report title"],
       trim: true,
-      maxlength: [200, 'Title cannot be more than 200 characters']
+      maxlength: [200, "Title cannot be more than 200 characters"],
     },
     category: {
       type: String,
-      enum: ['CRIME', 'MISSING', 'DOG', 'HAZARD', 'NATURAL_DISASTER'],
-      required: [true, 'Please select a category']
+      enum: ["CRIME", "MISSING", "DOG", "HAZARD", "NATURAL_DISASTER"],
+      required: [true, "Please select a category"],
     },
     description: {
       type: String,
-      required: [true, 'Please provide a description'],
-      maxlength: [5000, 'Description cannot be more than 5000 characters']
+      required: [true, "Please provide a description"],
+      maxlength: [5000, "Description cannot be more than 5000 characters"],
     },
     images: [
       {
-        type: String,
-        url: String
-      }
+        url: {
+          type: String,
+          required: true,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
     ],
     location: {
       type: {
         type: String,
-        enum: ['Point'],
-        default: 'Point'
+        enum: ["Point"],
+        default: "Point",
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        required: [true, 'Please provide location coordinates']
+        required: [true, "Please provide location coordinates"],
       },
       address: {
         type: String,
-        required: [true, 'Please provide a street address']
-      }
+        required: [true, "Please provide a street address"],
+      },
     },
     priority: {
       type: String,
-      enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
-      default: 'MEDIUM'
+      enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      default: "MEDIUM",
     },
     status: {
       type: String,
-      enum: ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED'],
-      default: 'PENDING'
+      enum: ["PENDING", "IN_PROGRESS", "UNDER_REVIEW", "RESOLVED", "CLOSED"],
+      default: "PENDING",
     },
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
+      ref: "User",
+      required: true,
     },
     views: {
       type: Number,
-      default: 0
+      default: 0,
     },
     comments: [
       {
         user: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: 'User'
+          ref: "User",
         },
         text: String,
         createdAt: {
           type: Date,
-          default: Date.now
-        }
-      }
+          default: Date.now,
+        },
+      },
     ],
     resolvedAt: {
-      type: Date
+      type: Date,
     },
     resolvedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: "User",
     },
     verified: {
       type: Boolean,
-      default: false
+      default: false,
     },
     verificationScore: {
       type: Number,
-      default: 0
+      default: 0,
     },
     upVotes: {
       type: Number,
-      default: 0
+      default: 0,
     },
     downVotes: {
       type: Number,
-      default: 0
+      default: 0,
     },
     flags: {
       type: Number,
-      default: 0
+      default: 0,
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Department'
+      ref: "Department",
     },
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: "User",
     },
     assignedAt: {
-      type: Date
+      type: Date,
     },
     assignedOfficer: {
       type: String,
       default: null,
       trim: true,
-      maxlength: 100
+      maxlength: 100,
     },
     institutionNotes: {
       type: String,
-      default: '',
+      default: "",
       trim: true,
-      maxlength: 2000
+      maxlength: 2000,
     },
     createdAt: {
       type: Date,
-      default: Date.now
-    }
+      default: Date.now,
+    },
   },
-  { 
+  {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
 // Create geospatial index for location-based queries
-reportSchema.index({ 'location.coordinates': '2dsphere' });
+reportSchema.index({ "location.coordinates": "2dsphere" });
 
 // Virtual for latitude
-reportSchema.virtual('latitude').get(function () {
+reportSchema.virtual("latitude").get(function () {
   return this.location?.coordinates[1];
 });
 
 // Virtual for longitude
-reportSchema.virtual('longitude').get(function () {
+reportSchema.virtual("longitude").get(function () {
   return this.location?.coordinates[0];
 });
 
 // Method to get reports near a location (within specified km)
-reportSchema.statics.findNear = function (longitude, latitude, maxDistance = 5000) {
+reportSchema.statics.findNear = function (
+  longitude,
+  latitude,
+  maxDistance = 5000
+) {
   return this.find({
     location: {
       $near: {
         $geometry: {
-          type: 'Point',
-          coordinates: [longitude, latitude]
+          type: "Point",
+          coordinates: [longitude, latitude],
         },
-        $maxDistance: maxDistance
-      }
-    }
+        $maxDistance: maxDistance,
+      },
+    },
   });
 };
 
@@ -183,11 +193,11 @@ reportSchema.statics.findMapReports = function (filters = {}) {
     query.location = {
       $near: {
         $geometry: {
-          type: 'Point',
-          coordinates: [filters.longitude, filters.latitude]
+          type: "Point",
+          coordinates: [filters.longitude, filters.latitude],
         },
-        $maxDistance: maxDistance
-      }
+        $maxDistance: maxDistance,
+      },
     };
   }
 
@@ -200,10 +210,12 @@ reportSchema.statics.getMapPins = function (query, options = {}) {
   const skip = options.skip || 0;
 
   return this.find(query)
-    .select('title category priority status verified location latitude longitude createdAt views')
+    .select(
+      "title category priority status verified location latitude longitude createdAt views"
+    )
     .limit(limit)
     .skip(skip)
     .lean();
 };
 
-module.exports = mongoose.model('Report', reportSchema);
+module.exports = mongoose.model("Report", reportSchema);

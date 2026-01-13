@@ -137,7 +137,7 @@ const Register = () => {
         <div className="text-center mb-10">
           <Link to="/" className="inline-flex items-center space-x-2 mb-6">
             <div className="w-12 h-12 bg-[#658B6F] rounded-lg"></div>
-            <span className="text-[#28363D] text-2xl font-bold">SafetyNet</span>
+            <span className="text-[#28363D] text-2xl font-bold">SurakshaMapt</span>
           </Link>
           <h1 className="text-3xl font-bold text-[#28363D] mb-2">
             Create Your Account
@@ -300,7 +300,7 @@ const Register = () => {
                   required
                 />
 
-                <div className="bg-[#CEE1DD] p-4 rounded-lg">
+                {/* <div className="bg-[#CEE1DD] p-4 rounded-lg">
                   <h4 className="font-semibold text-[#28363D] mb-2">
                     Verification Required
                   </h4>
@@ -309,7 +309,7 @@ const Register = () => {
                     using government-issued ID or location-based verification to
                     ensure authentic reporting and community safety.
                   </p>
-                </div>
+                </div> */}
 
                 <div>
                   <label className="flex items-start">
