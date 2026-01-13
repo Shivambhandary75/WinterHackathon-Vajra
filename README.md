@@ -8,7 +8,10 @@ Users can pin incidents on a map, add proof, and help verify reports through com
 
 ## Demo Video Link
 
-[yet to be done]
+https://drive.google.com/file/d/161ZmOWhMu1lNs_hObF2AAUnK-d6_-_Hd/view?usp=sharing
+
+## Deployment Link
+https://winterhackathon-coral.vercel.app/
 
 ## Features
 
